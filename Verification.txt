@@ -1,3 +1,8 @@
+HoverDeck 1.7.4 verification — 2026-10-26
+
+Every HoverDeck dialog now uses HoverDeck's own frame (dark top bar with the app icon, title and close button; dragged by the top bar; resizable dialogs keep edge resizing) instead of the Windows title bar, and all 25 Windows message boxes were replaced by HoverDeck's own message box with the same buttons, defaults and results. A finishing pass gives every framed dialog dark button and field borders while keeping deliberately styled buttons. The Edit client tabs, tooltips and dialog number fields were restyled. Activity log moved from the removed View menu into Settings. Windows file and folder pickers remain standard Windows dialogs.
+All 167 regression checks, 11 real-window checks, 18 launcher integration checks, the local login integration checks and all 37 UI checks passed; the UI checks now fail if any dialog opened from the menus has the Windows title bar, and verify the framed message box.
+
 HoverDeck 1.7.3 verification — 2026-10-26
 
 Added Delete client: right-click a client card or a client on the map (Edit client… / Delete client), or Delete next to Cancel and Save in Edit client. A confirmation is required, the last client of a layout cannot be deleted, the client's window binding is dropped and running games are not closed. All 167 regression checks and all 36 UI checks passed, including deleting the middle of three clients, refusing to delete the last client, and the editor's Delete button requesting deletion.
