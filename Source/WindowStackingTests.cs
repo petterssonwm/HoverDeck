@@ -40,6 +40,15 @@ internal static class WindowStackingTests
         check("Clients all on one layer are never put in the front band", backend.Topmost.Count == 0 && saved.Count == 0);
         backend.Foreground = 999; coverage.Update(new(new[] { big, small, other }, Array.Empty<GameWindow>(), stack));
         check("Switching to another app takes higher layers out of the front band", backend.Topmost.Count == 0);
+        backend.Foreground = big.Handle;
+        coverage.Update(new(new[] { big, small, other }, new[] { big }, stack, new HashSet<nint> { big.Handle }));
+        check("A full-display fullscreen client under a higher layer is not lifted; the higher layer is", backend.Topmost.SetEquals(new[] { small.Handle }));
+        var partial = big with { Bounds = new(0, 0, 1280, 1440) };
+        coverage.Update(new(new[] { partial, small, other }, new[] { partial }, stack, new HashSet<nint>()));
+        check("A partial-display fullscreen client is still lifted above the taskbar", backend.Topmost.Contains(partial.Handle));
+        coverage.Update(new(new[] { big, small, other }, new[] { big }, new Dictionary<nint, int> { [big.Handle] = 1, [small.Handle] = 1, [other.Handle] = 1 }, new HashSet<nint> { big.Handle }));
+        check("Without layers, a full-display fullscreen client keeps its taskbar coverage", backend.Topmost.SetEquals(new[] { big.Handle }));
+        backend.Foreground = 999; coverage.Update(CoverageTargets.Empty);
     }
 
     private sealed class FakeOrder(params nint[] frontToBack) : IWindowOrderBackend

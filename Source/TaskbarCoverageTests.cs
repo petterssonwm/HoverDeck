@@ -146,6 +146,15 @@ internal sealed class TaskbarCoverageIntegrationTests : Form
                     flickerBackend.Foreground = 0; flickerCoverage.Update(flickerTargets); await Task.Delay(150);
                     if (Native.IsTopmost(smallClient.Handle) || flickerSaved.Count != 0) throw new Exception("Leaving the game kept the higher layer in the front band.");
                     lines.Add("PASS: while playing, raising the lower-layer client never covers the higher layer (no flicker), and leaving restores normal stacking.");
+                    // Full-display fullscreen client with a higher layer on top: it is not lifted, so clicking it cannot cover the higher layer.
+                    flickerBackend.Foreground = bigClient.Handle;
+                    var coveredTargets = new CoverageTargets(new[] { bigWindow, smallWindow }, new[] { bigWindow }, stack, new HashSet<nint> { bigClient.Handle });
+                    flickerCoverage.Update(coveredTargets); WindowStacking.Apply(order, stack); await Task.Delay(200);
+                    if (Native.IsTopmost(bigClient.Handle) || !Native.IsTopmost(smallClient.Handle)) throw new Exception("A full-display client under a higher layer was lifted into the front band.");
+                    Native.SetWindowPos(bigClient.Handle, 0, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010);
+                    if (Native.GetAncestor(Native.WindowFromPoint(new(smallClient.Left + 150, smallClient.Top + 100)), 2) != smallClient.Handle) throw new Exception("Clicking a full-display fullscreen client covered the higher layer.");
+                    flickerBackend.Foreground = 0; flickerCoverage.Update(coveredTargets); await Task.Delay(150);
+                    lines.Add("PASS: a full-display fullscreen client under a higher layer is not lifted, so clicking it never covers the higher layer.");
                     bigClient.Close(); smallClient.Close(); otherApp.Close();
                 }
                 if (fixturePath is not null)

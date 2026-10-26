@@ -17,7 +17,8 @@ public sealed class WindowLayerSnapshot
 }
 
 // Layers maps each tracked client window to its layer (higher = in front). Null when unused.
-internal sealed record CoverageTargets(GameWindow[] Tracked, GameWindow[] Fullscreen, IReadOnlyDictionary<nint, int>? Layers = null)
+// FullMonitor lists fullscreen clients that cover their entire display.
+internal sealed record CoverageTargets(GameWindow[] Tracked, GameWindow[] Fullscreen, IReadOnlyDictionary<nint, int>? Layers = null, IReadOnlySet<nint>? FullMonitor = null)
 {
     public static readonly CoverageTargets Empty = new(Array.Empty<GameWindow>(), Array.Empty<GameWindow>());
 }
@@ -45,11 +46,20 @@ internal sealed class WindowsWindowLayerBackend : IWindowLayerBackend
 internal sealed class TaskbarCoverage(IWindowLayerBackend backend, Action<List<WindowLayerSnapshot>> persist)
 {
     private readonly Dictionary<long, WindowLayerSnapshot> changed = new();
+    // A client covering its whole display does not need lifting: Windows keeps the taskbar out of the
+    // way of an active full-display window by itself. If clients on higher layers sit on top of it,
+    // lifting it would put it in the same band as them, and every click on it would briefly cover them.
+    private bool YieldsToHigherLayers(GameWindow window, CoverageTargets targets)
+    {
+        if (targets.Layers is not { } layers || targets.FullMonitor is not { } full || !full.Contains(window.Handle)) return false;
+        int Layer(nint handle) => layers.TryGetValue(handle, out var layer) ? layer : 1;
+        return targets.Tracked.Any(w => w.Handle != window.Handle && !w.Minimized && Layer(w.Handle) > Layer(window.Handle) && w.Bounds.IntersectsWith(window.Bounds) && backend.CanCover(w.Handle));
+    }
     public void Update(CoverageTargets targets)
     {
         var foreground = backend.Foreground;
         bool playing = targets.Tracked.Any(w => w.Handle == foreground && backend.Exists(WindowLayerSnapshot.From(w)));
-        var desired = playing ? targets.Fullscreen.Where(w => !w.Minimized && backend.CanCover(w.Handle)).Select(WindowLayerSnapshot.From)
+        var desired = playing ? targets.Fullscreen.Where(w => !w.Minimized && backend.CanCover(w.Handle) && !YieldsToHigherLayers(w, targets)).Select(WindowLayerSnapshot.From)
             .Where(backend.Exists).DistinctBy(w => w.Handle).ToDictionary(w => w.Handle) : new Dictionary<long, WindowLayerSnapshot>();
         // While playing, clients above the lowest layer join the topmost band. Clicking a lower-layer
         // client then cannot raise it over them (no flicker), and a covered fullscreen client cannot

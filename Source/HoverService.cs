@@ -163,7 +163,7 @@ public sealed class HoverService : IDisposable
         nativeEnabled = desired;
     }
     public void UpdateWindows(IEnumerable<GameWindow> windows) => eligible = windows.Select(w => w.Handle).ToHashSet();
-    public void UpdateCoverage(IEnumerable<GameWindow> tracked, IEnumerable<GameWindow> fullscreen, IReadOnlyDictionary<nint, int>? layers = null) => coverageTargets = new(tracked.ToArray(), fullscreen.ToArray(), layers);
+    public void UpdateCoverage(IEnumerable<GameWindow> tracked, IEnumerable<GameWindow> fullscreen, IReadOnlyDictionary<nint, int>? layers = null, IReadOnlySet<nint>? fullMonitor = null) => coverageTargets = new(tracked.ToArray(), fullscreen.ToArray(), layers, fullMonitor);
     private void CheckCoverage()
     {
         var targets = suspended ? CoverageTargets.Empty : coverageTargets;

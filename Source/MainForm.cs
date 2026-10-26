@@ -208,7 +208,8 @@ public sealed partial class MainForm : Form
             var fullscreen = layout.Slots.Where(s => s.WindowMode == ClientWindowMode.FullscreenWindowed && canvas.Assigned.ContainsKey(s.Id))
                 .Select(s => canvas.Assigned[s.Id]).Where(w => !w.Minimized && reserved.Any(a => a.IntersectsWith(w.Bounds)));
             var layers = layout.Slots.Where(s => canvas.Assigned.ContainsKey(s.Id)).GroupBy(s => canvas.Assigned[s.Id].Handle).ToDictionary(g => g.Key, g => g.Max(s => s.Layer));
-            hover?.UpdateCoverage(canvas.Assigned.Values, fullscreen, layers);
+            var fullMonitor = canvas.Assigned.Values.Where(w => monitors.Any(m => m.Bounds == w.Bounds)).Select(w => w.Handle).ToHashSet();
+            hover?.UpdateCoverage(canvas.Assigned.Values, fullscreen, layers, fullMonitor);
             openCount.Text = $"{canvas.Assigned.Count} of {layout.Slots.Count} clients open";
             int signature = layout.Slots.Aggregate(17, (h, s) => h * 31 + (canvas.Assigned.ContainsKey(s.Id) ? 1 : 0));
             if (signature != openSignature) { openSignature = signature; slots.Invalidate(); }
