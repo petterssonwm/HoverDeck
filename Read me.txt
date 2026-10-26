@@ -7,7 +7,7 @@ The shareable ZIP contains clean starting settings. Do not share your own Data f
 
 INSTALLING AND UPDATES
 
-Installer: download HoverDeck-win-Setup.exe from the project's GitHub Releases page and run it. It installs for your Windows account only (no administrator rights needed), adds Start menu and desktop shortcuts, and installs the .NET 8 Desktop Runtime and WebView2 if they are missing. The installer is not code-signed yet, so Windows may show "Windows protected your PC" the first time: choose More info, then Run anyway.
+Installer: download HoverDeck-Setup.exe from https://github.com/petterssonwm/HoverDeck/releases/latest and run it. It installs for your Windows account only (no administrator rights needed), adds Start menu and desktop shortcuts, and installs the .NET 8 Desktop Runtime and WebView2 if they are missing. The installer is not code-signed yet, so Windows may show "Windows protected your PC" the first time: choose More info, then Run anyway.
 Updates: an installed HoverDeck checks for a new version a few seconds after it starts and asks before updating; Settings > Check for updates does the same on demand. Updating closes HoverDeck, installs the new version and reopens it. It never updates while clients are being launched or placed.
 Settings: installed copies keep layouts and preferences in %LOCALAPPDATA%\HoverDeck\Data, so updates and uninstalling keep them. The portable ZIP keeps them in Data beside HoverDeck.exe and does not update itself.
 Publishing (for the maintainer): in the Source folder run .\release.ps1 -Version x.y.z -Notes "what changed". It builds, packs and publishes a GitHub release; installed copies pick it up automatically.

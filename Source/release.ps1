@@ -62,4 +62,11 @@ $upload = @('upload', 'github', '--repoUrl', $feed, '--token', $token, '-o', $pa
 if (-not $Draft) { $upload += '--publish' }
 & vpk @upload
 if ($LASTEXITCODE) { throw "Upload failed." }
-Write-Host "Done. Share this page with people: $feed/releases/latest  (they download HoverDeck-win-Setup.exe)"
+# Friendlier download names. Updates only use releases.win.json and the .nupkg files.
+$repoPath = $feed -replace '^https://github\.com/', ''
+$release = & gh api "repos/$repoPath/releases/tags/v$Version" | ConvertFrom-Json
+foreach ($rename in @(@("$PackId-win-Setup.exe", 'HoverDeck-Setup.exe'), @("$PackId-win-Portable.zip", 'HoverDeck-Portable.zip'))) {
+    $asset = $release.assets | Where-Object name -eq $rename[0]
+    if ($asset) { & gh api -X PATCH "repos/$repoPath/releases/assets/$($asset.id)" -f "name=$($rename[1])" | Out-Null }
+}
+Write-Host "Done. Share this page with people: $feed/releases/latest  (they download HoverDeck-Setup.exe)"
