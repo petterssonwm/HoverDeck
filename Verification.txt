@@ -1,3 +1,8 @@
+HoverDeck 1.7.1 verification — 2026-10-26
+
+Added the HoverDeck icon (multi-size .ico from the provided artwork, transparent margin trimmed) as the exe, window, notification-area, dialog and installer icon, and as the top-bar logo in place of the drawn blue H tile. All 148 regression checks and all 32 UI checks passed; the exe's associated icon was extracted and checked.
+Released as v1.7.1 through release.ps1 to update the installed 1.7.0 via GitHub Releases.
+
 HoverDeck 1.7.0 release — 2026-10-26
 
 Added a Velopack installer and update system. Installed copies keep settings in %LOCALAPPDATA%\HoverDeck\Data (the portable build keeps Data beside the exe), check GitHub Releases a few seconds after starting and on Settings > Check for updates, ask before updating, and never update while busy. release.ps1 builds, packs and publishes a release.
