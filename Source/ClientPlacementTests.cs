@@ -6,6 +6,12 @@ internal static class ClientPlacementTests
 {
     public static void Run(Action<string, bool> check)
     {
+        // Regression: a 697 px tall client dropped at y=8 must snap its top to 0. The old code then also snapped its bottom to the display middle (720), leaving it at y=23.
+        int[] displayX = { 0, 2560, 1280 }, displayY = { 0, 1440, 720 };
+        check("Dragging snaps to the closest guide only, not a farther one checked later", LayoutCanvas.Snap(new(4, 8, 1081, 697), false, displayX, displayY, 55) == new Rectangle(0, 0, 1081, 697));
+        check("Clients snap to another client's edges", LayoutCanvas.Snap(new(1500, 300, 400, 300), false, new[] { 0, 2560, 1280, 1520 }, new[] { 0, 1440, 720, 310 }, 55) == new Rectangle(1520, 310, 400, 300));
+        check("Resizing snaps only the moving right and bottom edges", LayoutCanvas.Snap(new(0, 0, 1270, 700), true, displayX, displayY, 55) == new Rectangle(0, 0, 1280, 720));
+        check("Nothing beyond the snap distance moves the client", LayoutCanvas.Snap(new(300, 300, 400, 300), false, displayX, displayY, 55) == new Rectangle(300, 300, 400, 300));
         var display = new MonitorInfo("OFFSET", false, new(-1440, -743, 1440, 2560), new(-1440, -743, 1440, 2512));
         var slot = new Slot { Name = "Fullscreen fixture" }; slot.SetBounds(display.WorkArea);
         ClientPlacement.ChangeMode(slot, display, ClientWindowMode.FullscreenWindowed);

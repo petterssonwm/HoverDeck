@@ -144,6 +144,29 @@ public sealed class LayoutCanvas : Control
         using (var frame = new Pen(AppTheme.Line)) g.DrawRectangle(frame, 0, 0, Width - 1, Height - 1);
         g.DrawString(DisplayEditMode ? "Zoom stays fixed · Fit view to show all displays · Ctrl disables snapping" : "Drag to move  ·  Bottom-right corner to resize  ·  Ctrl disables snapping", small, muted, 20, Height - 25);
     }
+    // Snaps a dragged or resized client to the nearest guide line per direction. Only the single
+    // closest candidate is used, so a far edge can never override a nearer one.
+    internal static Rectangle Snap(Rectangle r, bool resizing, int[] edgesX, int[] edgesY, int threshold)
+    {
+        static int? Nearest(int[] edges, int threshold, params int[] points)
+        {
+            int? best = null;
+            foreach (int edge in edges) foreach (int point in points)
+                if (Math.Abs(edge - point) < threshold && (best is null || Math.Abs(edge - point) < Math.Abs(best.Value))) best = edge - point;
+            return best;
+        }
+        if (resizing)
+        {
+            if (Nearest(edgesX, threshold, r.Right) is { } dw) r.Width = Math.Max(160, r.Width + dw);
+            if (Nearest(edgesY, threshold, r.Bottom) is { } dh) r.Height = Math.Max(120, r.Height + dh);
+        }
+        else
+        {
+            if (Nearest(edgesX, threshold, r.Left, r.Right) is { } dx) r.X += dx;
+            if (Nearest(edgesY, threshold, r.Top, r.Bottom) is { } dy) r.Y += dy;
+        }
+        return r;
+    }
     private readonly List<(int Index, RectangleF Bounds)> labelHandles = new();
     private int LabelAt(Point p) { for (int k = labelHandles.Count - 1; k >= 0; k--) if (labelHandles[k].Bounds.Contains(p)) return labelHandles[k].Index; return -1; }
     private IEnumerable<int> DrawOrder() => Layout is null ? Enumerable.Empty<int>() :
@@ -215,10 +238,11 @@ public sealed class LayoutCanvas : Control
         {
             int threshold = (int)(8 / scale);
             var areas = Monitors.Select(m => ClientPlacement.Area(m, s.WindowMode)).ToArray();
-            var edgesX = areas.SelectMany(a => new[] { a.Left, a.Right, a.Left + a.Width / 2 });
-            var edgesY = areas.SelectMany(a => new[] { a.Top, a.Bottom, a.Top + a.Height / 2 });
-            foreach (int x in edgesX) { if (resizing && Math.Abs(next.Right - x) < threshold) next.Width = Math.Max(160, x - next.X); else if (!resizing) { if (Math.Abs(next.Left - x) < threshold) next.X = x; else if (Math.Abs(next.Right - x) < threshold) next.X = x - next.Width; } }
-            foreach (int y in edgesY) { if (resizing && Math.Abs(next.Bottom - y) < threshold) next.Height = Math.Max(120, y - next.Y); else if (!resizing) { if (Math.Abs(next.Top - y) < threshold) next.Y = y; else if (Math.Abs(next.Bottom - y) < threshold) next.Y = y - next.Height; } }
+            // Display edges and middles, plus the edges of the other clients (for placing one inside another).
+            var others = Layout.Slots.Where((_, k) => k != Selected).Select(o => o.Bounds).ToArray();
+            var edgesX = areas.SelectMany(a => new[] { a.Left, a.Right, a.Left + a.Width / 2 }).Concat(others.SelectMany(o => new[] { o.Left, o.Right }));
+            var edgesY = areas.SelectMany(a => new[] { a.Top, a.Bottom, a.Top + a.Height / 2 }).Concat(others.SelectMany(o => new[] { o.Top, o.Bottom }));
+            next = Snap(next, resizing, edgesX.ToArray(), edgesY.ToArray(), threshold);
         }
         s.SetBounds(next); LayoutEdited?.Invoke(); Invalidate();
     }
