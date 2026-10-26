@@ -88,7 +88,9 @@ public sealed class LayoutCanvas : Control
         // A layout editor must show the complete requested window geometry,
         // including overlap with taskbars and areas beyond a monitor. The same
         // desktop-to-canvas transform is used for displays, taskbars and slots.
-        var indices = Layout is null || DisplayEditMode ? Array.Empty<int>() : Enumerable.Range(0, Layout.Slots.Count).Where(i => i != Selected).Append(Selected).Distinct().ToArray();
+        // Back to front: lower layers first; within a layer the selected client is drawn last.
+        var indices = Layout is null || DisplayEditMode ? Array.Empty<int>() : DrawOrder().ToArray();
+        bool layered = Layout is not null && Layout.Slots.Select(s => s.Layer).Distinct().Count() > 1;
         foreach (var i in indices)
         {
             if (Layout is null || i < 0 || i >= Layout.Slots.Count) continue;
@@ -109,8 +111,12 @@ public sealed class LayoutCanvas : Control
                 if (new RectangleF(r.X, r.Y, r.Width, 32).IntersectsWith(new RectangleF(selectedRect.X, selectedRect.Y, selectedRect.Width, 32))) labelY += 36;
             }
             using var band = new SolidBrush(Color.FromArgb(15, 19, 26));
-            var label = $"{i + 1:00}  {s.Name}";
-            g.FillRectangle(band, r.X + 1, labelY + 1, Math.Min(r.Width - 2, g.MeasureString(label, regular).Width + 22), 30);
+            var label = $"{i + 1:00}  {s.Name}"; float labelWidth = g.MeasureString(label, regular).Width;
+            // The layer tag is shown only when layers are in use and it fits inside the client.
+            string tag = $"LAYER {s.Layer}"; float tagWidth = g.MeasureString(tag, small).Width + 10;
+            bool showTag = layered && labelWidth + tagWidth + 26 <= r.Width;
+            g.FillRectangle(band, r.X + 1, labelY + 1, Math.Min(r.Width - 2, labelWidth + 22 + (showTag ? tagWidth : 0)), 30);
+            if (showTag) { using var tagText = new SolidBrush(Color.FromArgb(139, 147, 163)); g.DrawString(tag, small, tagText, r.X + 9 + labelWidth + 6, labelY + 9); }
             using var text = new SolidBrush(color);
             g.DrawString(label, regular, text, r.X + 9, labelY + 7);
             g.Restore(clip);
@@ -128,6 +134,8 @@ public sealed class LayoutCanvas : Control
         using (var frame = new Pen(AppTheme.Line)) g.DrawRectangle(frame, 0, 0, Width - 1, Height - 1);
         g.DrawString(DisplayEditMode ? "Zoom stays fixed · Fit view to show all displays · Ctrl disables snapping" : "Drag to move  ·  Bottom-right corner to resize  ·  Ctrl disables snapping", small, muted, 20, Height - 25);
     }
+    private IEnumerable<int> DrawOrder() => Layout is null ? Enumerable.Empty<int>() :
+        Enumerable.Range(0, Layout.Slots.Count).OrderBy(i => Layout.Slots[i].Layer).ThenBy(i => i == Selected).ThenBy(i => i);
     public static string DisplayNumber(MonitorInfo monitor, int fallback)
     {
         var digits = new string(monitor.Name.Where(char.IsDigit).ToArray());
@@ -149,7 +157,7 @@ public sealed class LayoutCanvas : Control
             return;
         }
         if (e.Button != MouseButtons.Left || Layout is null) return;
-        var order = new[] { Selected }.Concat(Enumerable.Range(0, Layout.Slots.Count).Reverse()).Distinct();
+        var order = DrawOrder().Reverse(); // front-most first, matching what is drawn on top
         foreach (var i in order)
         {
             if (i < 0 || i >= Layout.Slots.Count) continue;

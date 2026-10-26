@@ -40,6 +40,20 @@ internal sealed class LibraryUiTests : Form
                 settings.Layouts = new() { new() { Name = "Evening WoW", Slots = new() { slot, second } } }; settings.ActiveLayout = "Evening WoW";
                 Render(new MainForm(true, settings), "workspace");
                 Render(new MainForm(true, settings) { Size = new(1080, 760) }, "workspace-small");
+                var bigSlot = new Slot { Name = "Main", LaunchMethod = ClientLaunchMethod.BattleNet, BattleNet = new() { AccountName = "WoW1 (EU)" }, Layer = 1 }; bigSlot.SetBounds(area);
+                var smallSlot = new Slot { Name = "Healer", Layer = 2 }; smallSlot.SetBounds(new(area.Right - area.Width / 4, area.Bottom - area.Height / 3, area.Width / 4, area.Height / 3));
+                var layeredSettings = new Settings { Layouts = new() { new() { Name = "Layered setup", Slots = new() { bigSlot, smallSlot } } }, ActiveLayout = "Layered setup" };
+                using (var layeredForm = new MainForm(true, layeredSettings))
+                {
+                    var layerField = (NumericUpDown)layeredForm.Controls.Find("ClientLayer", true).Single();
+                    if (layerField.Value != 1) throw new Exception("The Layer field does not show the selected client's layer.");
+                    layeredForm.ShowInTaskbar = false; layeredForm.Show(); Application.DoEvents();
+                    using var bitmap = new Bitmap(layeredForm.Width, layeredForm.Height); layeredForm.DrawToBitmap(bitmap, new Rectangle(Point.Empty, layeredForm.Size)); bitmap.Save(Path.Combine(output, "workspace-layers.png"));
+                    layerField.Value = 3;
+                    if (bigSlot.Layer != 3) throw new Exception("Changing the Layer field did not update the client.");
+                    layeredForm.Close();
+                }
+                lines.Add("PASS: the Layer field shows and edits the selected client's layer; layered layout rendered");
                 var modeEditor = new MainForm(true, settings) { Size = new(1080, 760) };
                 var mode = (ComboBox)modeEditor.Controls.Find("ClientWindowMode", true).Single();
                 mode.SelectedIndex = (int)ClientWindowMode.FullscreenWindowed;

@@ -34,6 +34,10 @@ internal static class Native
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(nint h, StringBuilder text, int length);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(nint h, out uint pid);
     [DllImport("user32.dll")] public static extern nint GetWindow(nint h, uint cmd);
+    [DllImport("user32.dll")] public static extern nint GetTopWindow(nint h);
+    public delegate void WinEventProc(nint hook, uint eventType, nint hwnd, int idObject, int idChild, uint thread, uint time);
+    [DllImport("user32.dll")] public static extern nint SetWinEventHook(uint eventMin, uint eventMax, nint module, WinEventProc callback, uint process, uint thread, uint flags);
+    [DllImport("user32.dll")] public static extern bool UnhookWinEvent(nint hook);
     [DllImport("user32.dll")] public static extern nint GetAncestor(nint h, uint flags);
     [DllImport("user32.dll")] public static extern nint WindowFromPoint(POINT point);
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);

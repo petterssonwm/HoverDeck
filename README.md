@@ -26,9 +26,11 @@ If you run more than one WoW client at a time (multiboxing, or just keeping an a
   - **Battle.net:** picks the right installed WoW version and WoW account in your signed-in Battle.net launcher and presses Play for each client.
   - **Direct / private servers:** starts the game executable directly and can optionally fill in the login screen for you (credentials are encrypted with your Windows account).
 - **Hover focus.** Point at a game window and it gets keyboard focus, without clicking and without bringing it to the front. Toggle it with a button or a global shortcut (Ctrl+Alt+H by default). Your original Windows settings are restored when HoverDeck closes, even after a crash.
+- **Layers for overlapping clients.** Put a small window (say, a healer) on top of a full-screen main: give it a higher *Layer* and it always stays in front, even when you click or hover-focus the big window behind it. Other apps are never pushed behind your game.
 - **Apply positions.** Moved a client on the map? An *Apply positions* button appears and moves the open windows into place without launching anything.
 - **Close or restart all clients** from the arrow on *Start clients*.
 - **Arrange your Windows displays** (monitor positions and primary display) from inside HoverDeck, with a 20-second "keep or revert" safety net.
+- **Minimize your way.** Minimize to the notification area (default) or to the taskbar like any other window.
 - **Automatic updates.** The installed version checks for new releases and asks before updating.
 
 HoverDeck only places windows, manages focus and starts clients. It does not broadcast keystrokes to multiple clients or automate gameplay. It is a fan-made tool, not affiliated with or endorsed by Blizzard Entertainment. Make sure your use follows the rules of the game or server you play on.

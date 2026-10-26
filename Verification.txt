@@ -1,3 +1,9 @@
+HoverDeck 1.7.2 verification — 2026-10-26
+
+Added client layers: each client has a Layer (1 = back). Where clients overlap, higher layers stay in front even after the lower client is clicked or hover-focused. HoverDeck reorders only the game windows among themselves (asynchronously, without activation), keeping the frontmost game window's place relative to other apps; it re-checks on every foreground change and every 150 ms. Taskbar coverage lifts higher-layer clients together with a covered fullscreen client and restores them through the existing recovery journal. The map draws and hit-tests clients in layer order.
+Added Settings > Minimize to notification area (default on, matching earlier behaviour); off minimizes to the taskbar.
+All 157 regression checks passed, including 9 new layer checks (ordering, no re-stacking when correct, other apps kept in front, same-layer behaviour, three layers, minimized clients, coverage lifting and restoring). Real-window checks passed: a higher-layer window returns in front after the lower one is clicked to the front, another app stays in front, keyboard focus is unchanged, and a higher-layer client in a separate process stays in front. All 33 UI checks passed, including editing the Layer field and rendering a layered layout. The launcher integration hotkey check failed only because the installed HoverDeck was running and holding Ctrl+Alt+H; it passed earlier with HoverDeck closed. Not yet tried with real WoW clients.
+
 HoverDeck 1.7.1 verification — 2026-10-26
 
 Added the HoverDeck icon (multi-size .ico from the provided artwork, transparent margin trimmed) as the exe, window, notification-area, dialog and installer icon, and as the top-bar logo in place of the drawn blue H tile. All 148 regression checks and all 32 UI checks passed; the exe's associated icon was extracted and checked.

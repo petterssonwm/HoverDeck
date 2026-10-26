@@ -73,14 +73,16 @@ public sealed partial class MainForm
         var fit = Button("Fit client  ▾"); fit.Name = "ClientFitMenu"; fit.Dock = DockStyle.Fill; fit.Margin = new(0, 2, 8, 6); fit.Click += (_, _) => fitMenu.Show(fit, 0, fit.Height); selected.Controls.Add(fit, 2, 0);
         var edit = Button("Edit client…"); edit.Name = "EditClient"; edit.Dock = DockStyle.Fill; edit.Margin = new(0, 2, 0, 6); selected.Controls.Add(edit, 3, 0); details.Controls.Add(selected, 0, 0);
         var fields = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty };
-        windowMode.Items.AddRange(new object[] { "Windowed", "Fullscreen windowed" }); windowMode.AccessibleName = "Client window mode"; windowMode.Width = 210;
+        windowMode.Items.AddRange(new object[] { "Windowed", "Fullscreen windowed" }); windowMode.AccessibleName = "Client window mode"; windowMode.Width = 190;
         fields.Controls.Add(FieldGroup("Window mode", windowMode));
-        foreach (var pair in new[] { ("X", posX), ("Y", posY), ("Width", sizeW), ("Height", sizeH) }) { pair.Item2.AccessibleName = "Client " + pair.Item1; fields.Controls.Add(FieldGroup(pair.Item1, new FieldBox(pair.Item2, 92))); }
+        layer.Name = "ClientLayer"; layer.AccessibleName = "Client layer"; layer.TextAlign = HorizontalAlignment.Center; fields.Controls.Add(FieldGroup("Layer", new FieldBox(layer, 64)));
+        foreach (var pair in new[] { ("X", posX, 80), ("Y", posY, 80), ("Width", sizeW, 84), ("Height", sizeH, 84) }) { pair.Item2.AccessibleName = "Client " + pair.Item1; fields.Controls.Add(FieldGroup(pair.Item1, new FieldBox(pair.Item2, pair.Item3))); }
         // Apply positions sits under Edit client and only appears while an open window is away from its spot on the map.
         var fieldsRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty }; fieldsRow.RowStyles.Add(new(SizeType.Percent, 100));
         fieldsRow.ColumnStyles.Add(new(SizeType.Percent, 100)); fieldsRow.ColumnStyles.Add(new(SizeType.Absolute, 124));
         apply.Name = "ApplyPositions"; apply.Size = new(124, 30); apply.Anchor = AnchorStyles.Bottom | AnchorStyles.Right; apply.Margin = new(0, 0, 0, 11); apply.Visible = false; AppTheme.Primary(apply);
         fieldsRow.Controls.Add(fields, 0, 0); fieldsRow.Controls.Add(apply, 1, 0); details.Controls.Add(fieldsRow, 0, 1);
+        hints.SetToolTip(layer, "Where clients overlap, a higher layer stays in front of a lower one, even when you click or hover over the client behind it. Clients on the same layer behave like normal windows. 1 is the back.");
         hints.SetToolTip(windowMode, "Windowed leaves room for the taskbar. Fullscreen windowed covers the whole display. Changing it refits this client; half-screen presets are kept. WoW's own graphics mode is set inside the game.");
         ConfigureDisplayEditor(editor, sidebar, details); content.Controls.Add(editor, 0, 1);
         var logs = new Panel { Dock = DockStyle.Fill, Padding = new(12), BackColor = Surface, Margin = new(0, 12, 0, 0), Visible = false };
@@ -91,7 +93,7 @@ public sealed partial class MainForm
         Theme(this); slots.BackColor = AppTheme.Rail; logBox.BackColor = Surface; UpdateHotkeyLabel(); delay.Value = settings.DelayMs;
         var trayMenu = new ContextMenuStrip { Renderer = new WorkspaceMenuRenderer() }; trayMenu.Items.Add("Open HoverDeck", null, (_, _) => RestoreWindow()); trayMenu.Items.Add("Toggle WoW hover focus", null, (_, _) => toggle.Checked = !toggle.Checked); trayMenu.Items.Add(new ToolStripSeparator()); trayMenu.Items.Add("Exit and restore Windows settings", null, (_, _) => Close());
         tray = new NotifyIcon { Icon = Icon, Text = "HoverDeck · hover focus off", ContextMenuStrip = trayMenu, Visible = !preview }; tray.DoubleClick += (_, _) => RestoreWindow();
-        Resize += (_, _) => { maximizeButton.Invalidate(); if (!preview && WindowState == FormWindowState.Minimized) Hide(); };
+        Resize += (_, _) => { maximizeButton.Invalidate(); if (!preview && WindowState == FormWindowState.Minimized && settings.MinimizeToTray) Hide(); };
         toggle.CheckedChanged += (_, _) => { hoverOn = toggle.Checked; hover?.Enable(hoverOn); toggle.Text = "Hover focus " + (hoverOn ? "on" : "off"); tray.Text = "HoverDeck · hover focus " + (hoverOn ? "on" : "off"); Log(hoverOn ? $"WoW hover focus enabled · {settings.DelayMs} ms." : "WoW hover focus paused."); };
         delay.ValueChanged += (_, _) => { settings.DelayMs = (int)delay.Value; hover?.SetDelay(settings.DelayMs); SaveSoon(); };
         hotkey.Click += (_, _) => ChooseHotkey();
@@ -107,6 +109,7 @@ public sealed partial class MainForm
             ClientPlacement.ChangeMode(slot, monitors[targetMonitor.SelectedIndex], (ClientWindowMode)windowMode.SelectedIndex);
             UpdateSlotDetails(); canvas.Invalidate(); SaveSoon();
         };
+        layer.ValueChanged += (_, _) => { if (!syncing && CurrentSlot is { } s) { s.Layer = (int)layer.Value; canvas.Invalidate(); RefreshClients(); SaveSoon(); } };
         foreach (var input in new[] { posX, posY, sizeW, sizeH }) input.ValueChanged += (_, _) => { if (!syncing && CurrentSlot is { } s) { s.SetBounds(new((int)posX.Value, (int)posY.Value, (int)sizeW.Value, (int)sizeH.Value)); canvas.Invalidate(); UpdateApplyButton(); SaveSoon(); } };
         start.ShowArrow = true; start.ArrowClick += () => { start.Focus(); clientMenu.Show(start, new Point(0, -4), ToolStripDropDownDirection.AboveRight); };
         clientMenu.MinimumSize = new(start.Width, 0); start.Resize += (_, _) => clientMenu.MinimumSize = new(start.Width, 0);
@@ -138,6 +141,9 @@ public sealed partial class MainForm
         }));
         sharedSettingsMenu.DropDownItems.Add(new ToolStripSeparator());
         sharedSettingsMenu.DropDownItems.Add("Hover focus…", null, (_, _) => ShowHoverPreferences());
+        var trayMinimize = new ToolStripMenuItem("Minimize to notification area") { Name = "MinimizeToTray", CheckOnClick = true, Checked = settings.MinimizeToTray, ToolTipText = "On: minimizing hides HoverDeck next to the clock. Off: it minimizes to the taskbar like a normal window." };
+        trayMinimize.CheckedChanged += (_, _) => { settings.MinimizeToTray = trayMinimize.Checked; SaveSoon(); };
+        sharedSettingsMenu.DropDownItems.Add(trayMinimize);
         sharedSettingsMenu.DropDownItems.Add(new ToolStripSeparator());
         sharedSettingsMenu.DropDownItems.Add("Check for updates…", null, async (_, _) => await CheckForUpdates(true));
         var viewMenu = new ToolStripMenuItem("VIEW  ▾"); viewMenu.DropDownItems.Add(activityLog);

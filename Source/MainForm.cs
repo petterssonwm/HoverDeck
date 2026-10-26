@@ -30,6 +30,7 @@ public sealed partial class MainForm : Form
     private readonly NumericUpDown posX = Number(-64000, 64000), posY = Number(-64000, 64000), sizeW = Number(160, 32000), sizeH = Number(120, 32000);
     private readonly DarkComboBox targetMonitor = new() { Name = "TargetMonitor", Width = 125 };
     private readonly DarkComboBox windowMode = new() { Name = "ClientWindowMode", Width = 235 };
+    private readonly NumericUpDown layer = Number(1, 9);
     private readonly Label windowModeHint = new() { AutoSize = true, ForeColor = Muted, Margin = new(12, 6, 0, 0) };
     private const int ClientDetailsHeight = 132;
     private readonly Label status = new() { AutoSize = false, ForeColor = Muted, Font = new("Segoe UI", 9) };
@@ -50,7 +51,7 @@ public sealed partial class MainForm : Form
     public MainForm(bool preview, Settings? previewSettings = null)
     {
         this.preview = preview;
-        Text = "HoverDeck — WoW workspace"; FormBorderStyle = FormBorderStyle.None; Size = new(1330, 930); MinimumSize = new(1080, 760); StartPosition = FormStartPosition.CenterScreen;
+        Text = "HoverDeck — WoW workspace"; FormBorderStyle = FormBorderStyle.None; Size = new(1330, 930); MinimumSize = new(1160, 760); StartPosition = FormStartPosition.CenterScreen;
         Font = new("Segoe UI", 10); BackColor = Background; ForeColor = Ink; AutoScaleMode = AutoScaleMode.Dpi;
         Icon = AppTheme.AppIcon;
         settings = previewSettings ?? Storage.Load(); desktopState = new DesktopState(); monitors = desktopState.Monitors;
@@ -149,7 +150,7 @@ public sealed partial class MainForm : Form
     {
         if (CurrentSlot is not { } s) return;
         syncing = true; selectedClientTitle.Text = s.Name; selectedTile.Invalidate();
-        windowMode.SelectedIndex = (int)s.WindowMode;
+        windowMode.SelectedIndex = (int)s.WindowMode; layer.Value = Math.Clamp(s.Layer, 1, 9);
         windowModeHint.Text = s.WindowMode == ClientWindowMode.FullscreenWindowed ? "Covers the taskbar while using WoW" : "Leaves room for the taskbar";
         posX.Value = Math.Clamp(s.X, -64000, 64000); posY.Value = Math.Clamp(s.Y, -64000, 64000);
         sizeW.Value = Math.Clamp(s.Width, 160, 32000); sizeH.Value = Math.Clamp(s.Height, 120, 32000);
@@ -206,7 +207,8 @@ public sealed partial class MainForm : Form
             var reserved = monitors.SelectMany(DesktopGeometry.ReservedAreas).Select(a => a.Bounds).ToArray();
             var fullscreen = layout.Slots.Where(s => s.WindowMode == ClientWindowMode.FullscreenWindowed && canvas.Assigned.ContainsKey(s.Id))
                 .Select(s => canvas.Assigned[s.Id]).Where(w => !w.Minimized && reserved.Any(a => a.IntersectsWith(w.Bounds)));
-            hover?.UpdateCoverage(canvas.Assigned.Values, fullscreen);
+            var layers = layout.Slots.Where(s => canvas.Assigned.ContainsKey(s.Id)).GroupBy(s => canvas.Assigned[s.Id].Handle).ToDictionary(g => g.Key, g => g.Max(s => s.Layer));
+            hover?.UpdateCoverage(canvas.Assigned.Values, fullscreen, layers);
             openCount.Text = $"{canvas.Assigned.Count} of {layout.Slots.Count} clients open";
             int signature = layout.Slots.Aggregate(17, (h, s) => h * 31 + (canvas.Assigned.ContainsKey(s.Id) ? 1 : 0));
             if (signature != openSignature) { openSignature = signature; slots.Invalidate(); }

@@ -110,6 +110,31 @@ internal sealed class TaskbarCoverageIntegrationTests : Form
                 foreach (var original in persisted) original.Restore(); await Task.Delay(100);
                 if (Native.IsTopmost(game.Handle)) throw new Exception("Recovery did not restore the original stacking flag.");
                 lines.Add("PASS: persisted recovery metadata restores stacking through the watchdog's recovery method.");
+                // Client layers with real windows: a big client (layer 1), a small overlapping client (layer 2) and another app.
+                using (var bigClient = new FixtureWindow { Text = "HoverDeck layer 1", BackColor = Color.DarkSlateBlue })
+                using (var smallClient = new FixtureWindow { Text = "HoverDeck layer 2", BackColor = Color.Orange })
+                using (var otherApp = new FixtureWindow { Text = "HoverDeck other app", BackColor = Color.Gray })
+                {
+                    bigClient.Bounds = new(bounds.X, bounds.Y, Math.Min(900, bounds.Width), 500); smallClient.Bounds = new(bounds.X + 300, bounds.Y + 150, 300, 200);
+                    otherApp.Bounds = new(bounds.X + 700, bounds.Y + 350, 300, 200);
+                    bigClient.Show(); smallClient.Show(); otherApp.Show(); await Task.Delay(100);
+                    var order = new WindowsWindowOrderBackend(); var stack = new Dictionary<nint, int> { [bigClient.Handle] = 1, [smallClient.Handle] = 2 };
+                    Native.SetWindowPos(bigClient.Handle, 0, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010); await Task.Delay(100); // big client clicked to the front
+                    WindowStacking.Apply(order, stack); await Task.Delay(200);
+                    var z = order.FrontToBack(new[] { bigClient.Handle, smallClient.Handle, otherApp.Handle }).ToList();
+                    if (z.IndexOf(smallClient.Handle) > z.IndexOf(bigClient.Handle)) throw new Exception("The layer-2 window did not move in front of the layer-1 window.");
+                    nint onTop = Native.GetAncestor(Native.WindowFromPoint(new(smallClient.Left + 150, smallClient.Top + 100)), 2);
+                    if (onTop != smallClient.Handle) throw new Exception("The layer-2 window is not the visible window where the two overlap.");
+                    lines.Add("PASS: with real windows, a higher-layer client returns in front of a lower-layer client that was clicked to the front.");
+                    Native.SetWindowPos(otherApp.Handle, 0, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010); await Task.Delay(100); // another app in front
+                    Native.SetWindowPos(smallClient.Handle, bigClient.Handle, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010); await Task.Delay(100); // wrong order below it
+                    WindowStacking.Apply(order, stack); await Task.Delay(200);
+                    z = order.FrontToBack(new[] { bigClient.Handle, smallClient.Handle, otherApp.Handle }).ToList();
+                    if (z[0] != otherApp.Handle || z.IndexOf(smallClient.Handle) > z.IndexOf(bigClient.Handle)) throw new Exception("Layer ordering pulled game windows in front of another app.");
+                    if (Native.GetForegroundWindow() != foreground) throw new Exception("Layer ordering changed keyboard focus.");
+                    lines.Add("PASS: layer ordering keeps another app in front and does not change keyboard focus.");
+                    bigClient.Close(); smallClient.Close(); otherApp.Close();
+                }
                 if (fixturePath is not null)
                 {
                     child = Process.Start(new ProcessStartInfo(fixturePath) { UseShellExecute = false })!;

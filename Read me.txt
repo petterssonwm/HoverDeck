@@ -1,4 +1,4 @@
-HOVERDECK 1.7.1 — WoW workspace
+HOVERDECK 1.7.2 — WoW workspace
 
 Open HoverDeck.exe. Requires Windows x64, .NET 8 Windows Desktop Runtime and Microsoft Edge WebView2 Runtime.
 Downloads: https://dotnet.microsoft.com/download/dotnet/8.0 and https://developer.microsoft.com/microsoft-edge/webview2/ (Evergreen Runtime).
@@ -16,10 +16,10 @@ WHERE THINGS LIVE
 
 Main workspace: the left sidebar holds the saved layout, the number of clients (− / +) and one card per client showing its account and whether it is OPEN or PLANNED. The selected layout's name is shown above the display map; arrange the client rectangles on the map. Select a client to edit its Window mode and X/Y/width/height below the map. Fit client offers Fit screen, Left half and Right half for the selected display. Edit client opens its launch/login setup; double-clicking a client card does the same.
 
-The top bar works as the window's title bar: drag it to move HoverDeck, double-click it to maximize, and use the minimize / maximize / close buttons at its right end. The window edges resize and Windows snap works as usual. Minimize still hides HoverDeck to the notification area.
+The top bar works as the window's title bar: drag it to move HoverDeck, double-click it to maximize, and use the minimize / maximize / close buttons at its right end. The window edges resize and Windows snap works as usual. Minimizing hides HoverDeck to the notification area by default; turn off Settings > Minimize to notification area to minimize it to the taskbar like a normal window instead.
 
 Layout menu: New, Save a copy, Capture open clients, Direct-launch defaults and Exit.
-Settings menu: WoW folders, Battle.net connections and Hover focus. These are shared across all layouts and clients.
+Settings menu: WoW folders, Battle.net connections, Hover focus, Minimize to notification area and Check for updates. These are shared across all layouts and clients.
 View menu: show or hide the Activity log. It is collapsed initially to leave more room for the map.
 Clients / Arrange displays / Identify (above the map): switch between editing client positions and arranging the Windows displays, or show each display's number on its screen. The display map refreshes from Windows automatically.
 
@@ -87,6 +87,8 @@ Each client has a Window mode selector next to its placement controls:
 - Windowed: Fit client and snapping use the usable work area, leaving room for the taskbar.
 - Fullscreen windowed: Fit client and snapping use the full display, including the taskbar area. Clients overlapping the taskbar are kept above it while a tracked WoW client has keyboard focus, including partial-screen clients. Switching to another app or Windowed mode restores the window's original topmost state. This works independently of the hover-focus toggle.
 Changing modes refits the selected client on the chosen display. An exact Left half or Right half preset stays on that half; other placements refit to the full chosen area. Afterwards you can drag, resize or enter custom coordinates as usual. Click Apply positions to move an already-open client, or Start clients to launch/place the layout. The setting is saved separately for each client. It controls HoverDeck placement and does not edit WoW's graphics settings or Windows taskbar settings; select the game's own graphics mode inside WoW.
+
+Layer (next to Window mode) controls which client is in front where clients overlap, for example a small healer window on top of a full-screen main. A higher layer always stays in front of a lower one, even when you click or hover-focus the client behind it; clients on the same layer behave like normal windows. 1 is the back and new clients start on layer 1. HoverDeck only reorders the game windows among themselves, so other applications stay in front if you are using them, and keyboard focus is never changed. When a fullscreen-windowed client is lifted above the taskbar, clients on higher layers are lifted with it. The map draws clients in layer order and shows each client's layer when more than one is in use.
 
 Taskbar coverage changes only the relevant game windows' stacking, without moving them or taking keyboard focus. It releases coverage while HoverDeck is performing launch/login setup. Original window states are restored on exit; the existing recovery watchdog also restores changes after a crash using HWND, process ID and process-start identity. Windows already marked topmost by WoW retain that original setting.
 

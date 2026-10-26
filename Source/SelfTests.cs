@@ -57,6 +57,7 @@ internal static class SelfTests
             LibraryTests.Run(Check, catalog, firstChoices);
             ClientPlacementTests.Run(Check);
             TaskbarCoverageTests.Run(Check);
+            WindowStackingTests.Run(Check);
             var bnSlot = new Slot { Id = "bn", LaunchMethod = ClientLaunchMethod.BattleNet, BattleNet = bn };
             var bnLayout = new Layout { Slots = new() { bnSlot } };
             Check("Battle.net never guesses an account from window position", Matching.Assign(bnLayout, new[] { w1 }, new Dictionary<string, string>()).Count == 0);

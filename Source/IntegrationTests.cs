@@ -49,6 +49,15 @@ internal sealed class IntegrationTests : Form
             await launcher.Run(layout, monitors, true, lines.Add, CancellationToken.None);
             windows = Native.Windows(new[] { executable });
             Check("Restart opens fresh clients in every slot at the requested rectangles", windows.Count == 2 && !windows.Any(w => beforeClose.Contains(w.Identity)) && windows.Select(w => w.Bounds).ToHashSet().SetEquals(layout.Slots.Select(s => s.Bounds)));
+            // Layers across separate client processes: slot two (layer 2) overlaps slot one (layer 1).
+            var assigned = launcher.Assign(layout, Native.Windows(new[] { executable }));
+            var lower = assigned["one"]; var upper = assigned["two"];
+            Native.Place(upper, new(layout.Slots[0].X + 200, layout.Slots[0].Y + 100, 400, 250)); await Task.Delay(300);
+            Native.SetWindowPos(lower.Handle, 0, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010); await Task.Delay(300); // layer-1 client brought to the front
+            var stackOrder = new WindowsWindowOrderBackend(); var stackLayers = new Dictionary<nint, int> { [lower.Handle] = 1, [upper.Handle] = 2 };
+            for (int i = 0; i < 10 && WindowStacking.Apply(stackOrder, stackLayers); i++) await Task.Delay(150); // asynchronous across processes
+            var front = stackOrder.FrontToBack(new[] { lower.Handle, upper.Handle });
+            Check("Layers keep a higher-layer client in front of a lower-layer client in another process", front.Count == 2 && front[0] == upper.Handle);
             var before = new[] { Native.Setting(0x1000), Native.Setting(0x100C), Native.Setting(0x2002) };
             using (var service = new HoverService(50))
             {

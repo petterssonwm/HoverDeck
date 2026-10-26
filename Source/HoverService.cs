@@ -49,6 +49,9 @@ public sealed class HoverService : IDisposable
     private System.Windows.Forms.Timer? timer;
     private System.Windows.Forms.Timer? coverageTimer;
     private TaskbarCoverage? coverage;
+    private readonly WindowsWindowOrderBackend order = new();
+    private nint foregroundHook;
+    private Native.WinEventProc? foregroundCallback;
     private volatile CoverageTargets coverageTargets = CoverageTargets.Empty;
     public string? Error { get; private set; }
     public string? CoverageError { get; private set; }
@@ -117,6 +120,9 @@ public sealed class HoverService : IDisposable
             coverage = new(new WindowsWindowLayerBackend(), windows => { snapshot!.WindowLayers = windows; Storage.Write(RecoveryPath, snapshot); });
             coverageTimer = new() { Interval = 150 };
             coverageTimer.Tick += (_, _) => CheckCoverage(); coverageTimer.Start();
+            // Re-check layers the moment another window takes focus, not only on the next tick.
+            foregroundCallback = (_, _, _, _, _, _, _) => CheckCoverage();
+            foregroundHook = Native.SetWinEventHook(0x0003, 0x0003, 0, foregroundCallback, 0, 0, 0); // EVENT_SYSTEM_FOREGROUND, out of context
             ready.Set(); Application.Run();
         }
         catch (Exception ex) { startupError = ex; Error = ex.Message; ready.Set(); }
@@ -124,6 +130,7 @@ public sealed class HoverService : IDisposable
         {
             timer?.Dispose();
             coverageTimer?.Dispose();
+            if (foregroundHook != 0) Native.UnhookWinEvent(foregroundHook);
             if (hook != 0) Native.UnhookWindowsHookEx(hook);
             if (snapshot is not null)
             {
@@ -156,11 +163,14 @@ public sealed class HoverService : IDisposable
         nativeEnabled = desired;
     }
     public void UpdateWindows(IEnumerable<GameWindow> windows) => eligible = windows.Select(w => w.Handle).ToHashSet();
-    public void UpdateCoverage(IEnumerable<GameWindow> tracked, IEnumerable<GameWindow> fullscreen) => coverageTargets = new(tracked.ToArray(), fullscreen.ToArray());
+    public void UpdateCoverage(IEnumerable<GameWindow> tracked, IEnumerable<GameWindow> fullscreen, IReadOnlyDictionary<nint, int>? layers = null) => coverageTargets = new(tracked.ToArray(), fullscreen.ToArray(), layers);
     private void CheckCoverage()
     {
-        try { coverage?.Update(suspended ? CoverageTargets.Empty : coverageTargets); CoverageError = null; }
+        var targets = suspended ? CoverageTargets.Empty : coverageTargets;
+        try { coverage?.Update(targets); CoverageError = null; }
         catch (Exception ex) { CoverageError = ex.Message; }
+        try { if (targets.Layers is { Count: > 1 } layers) WindowStacking.Apply(order, layers); }
+        catch (Exception ex) { CoverageError = "Client layers: " + ex.Message; }
     }
     private void Post(Action action)
     {

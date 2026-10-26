@@ -14,6 +14,8 @@ public sealed class Slot
     public ClientLogin? Login { get; set; }
     public ClientLaunchMethod LaunchMethod { get; set; }
     public ClientWindowMode WindowMode { get; set; }
+    // Where clients overlap, a higher layer stays in front. 1 is the back.
+    public int Layer { get; set; } = 1;
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public BattleNetLaunch? BattleNet { get; set; }
     public int X { get; set; }
@@ -36,6 +38,8 @@ public sealed class Layout
 public sealed class Settings
 {
     public int DelayMs { get; set; } = 50;
+    // True: minimizing hides HoverDeck to the notification area. False: a normal taskbar minimize.
+    public bool MinimizeToTray { get; set; } = true;
     public uint HotkeyModifiers { get; set; } = 3;
     public int HotkeyKey { get; set; } = (int)Keys.H;
     public string ActiveLayout { get; set; } = "My WoW layout";
@@ -77,6 +81,7 @@ public static class Storage
         var s = JsonSerializer.Deserialize<Settings>(File.ReadAllText(SettingsPath), Json) ?? new();
         s.DelayMs = Math.Clamp(s.DelayMs, 0, 5000);
         s.Layouts ??= new();
+        foreach (var slot in s.Layouts.SelectMany(l => l.Slots)) slot.Layer = Math.Clamp(slot.Layer, 1, 9);
         s.BattleNetCatalog ??= new();
         s.WoWLibrary ??= new(); s.BattleNetConnections ??= new();
         foreach (var l in s.Layouts)
