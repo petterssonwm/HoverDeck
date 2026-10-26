@@ -1,0 +1,8 @@
+# Personal settings, saved logins and recovery files - never publish
+Data/
+*.log
+# Built app and build output
+*.exe
+Source/bin/
+Source/obj/
+Source/release/

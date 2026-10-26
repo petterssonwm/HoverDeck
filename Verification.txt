@@ -1,0 +1,258 @@
+HoverDeck 1.7.0 verification — 2026-10-26
+
+Restyled the workspace after the Battle.net launcher. The window is borderless: the top bar (logo, Layout / Settings / View, open-client count, hover-focus pill, minimize / maximize / close) is the title bar. Clients are sidebar cards with OPEN / PLANNED status and a − / + count, and Start clients sits at the bottom of the sidebar. The layout name heads the main area with Clients / Arrange displays / Identify links; the map caption, taskbar legend and selected-client status box are removed so the map is larger. Apply positions, the Displays menu and Refresh displays were removed: Start clients already places open clients, and the map already refreshes from Windows on a timer and on display-change messages. Dialogs use the same palette. No launch, login, placement or settings behaviour changed.
+Release build: zero warnings/errors. All 148 regression checks passed. All 26 UI checks passed, including rendering the workspace, display-arrange mode and dialogs, plus new window-frame checks: top-bar dragging, resizing on every edge and corner, clickable menus and buttons, maximize filling only the work area on each of three displays, and unchanged bounds after maximize / minimize / restore.
+Fix after first live look: when the window lost focus, Windows painted its classic caption and sizing frame over the borderless window. The window now has no caption style and suppresses non-client painting and activation repaints. Number fields no longer show the hidden spin-button strip over their right border. Taskbar text captions under each display and the Arrange displays help text were removed; the hatched taskbar strips and real validation errors remain.
+Earlier UI checks missed the caption because they drew windows to bitmaps and repainted before capturing. New checks read real screen pixels with the window focused and unfocused, and were confirmed to fail on the previous build (light caption pixels over the top bar) before passing on this one. All 148 regression checks and all 28 UI checks passed.
+Arrange displays: the current primary display's checkbox stays readable (unticking is ignored; tick another display instead). In preview mode (--preview), which never changes Windows settings, Apply to Windows is hidden and the status says changes are not sent to Windows; toolbar buttons have hover hints. The hit-test check now waits until the probed point belongs to the test window, fixing an intermittent failure right after the window opened; it passed five consecutive runs.
+Apply positions restored (it was removed earlier in this release): it sits under Edit client and is shown only while an open, non-minimized client's window differs from its map position, e.g. after dragging it. It moves open clients without launching or logging in. UI checks confirm it stays hidden with no differing window, appears for a simulated open client away from its position, and hides again once positions match. All 148 regression checks and all 30 UI checks passed (three consecutive runs).
+Start clients is a split button again: its arrow opens Close clients and Restart clients. Close asks this layout's open clients to close with WM_CLOSE (the window X), waits up to 30 seconds for each process to exit, never force-kills, and reports any client still running; Restart runs Start clients only after every client has closed. Both ask for confirmation first. Launcher integration checks with a local test window app passed, including the new Close (both clients exited by themselves) and Restart (two fresh clients at the requested rectangles) steps; Windows hover settings were restored. All 148 regression checks and all 32 UI checks passed, including the menu items and the menu opening above the button.
+Top bar height reduced from 58 to 44 px (logo, hover pill and window buttons scaled to match). All 148 regression checks and all 32 UI checks passed.
+Installed 1.7.0. Saved settings were not modified.
+
+HoverDeck 1.6.1 verification — 2026-10-25
+
+Fixed partial-screen fullscreen-windowed clients remaining behind the taskbar. The previous release changed bounds but preserved z-order. Relevant tracked clients now temporarily use the topmost band while a tracked WoW window has focus. Other apps, Windowed mode, minimization, layout changes and suspended launch/login operations release the temporary setting. Existing game-owned topmost states are preserved. No taskbar setting is changed.
+Original window identities/state are saved before promotion and restored by the existing exit/crash recovery path. Asynchronous restoration is enqueued even when a previous promotion has not completed, preventing delayed requests from leaving a client topmost. Closed/reused process identities are excluded from restoration.
+Installed and reopened 1.6.1. Saved settings/positions were verified unchanged, and the updated recovery service initialized successfully.
+Release build: zero warnings/errors. All 148 regression checks passed, including foreground scope, per-client restoration, pre-existing topmost windows, taskbar reappearance, journal failure, stale identities and queued promotion/restoration.
+All seven native coverage checks passed with temporary windows: partial-screen coverage above the real taskbar and a topmost taskbar fixture, unchanged geometry/focus, restoration on leaving WoW or changing modes, serialized recovery, and coverage/restoration for a separate-process client. No real WoW client or Windows taskbar setting was changed by tests. Actual coverage activates when the user returns focus to a tracked game.
+Win32 reference: https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowpos
+
+HoverDeck 1.6.0 verification — 2026-10-25
+
+Added a per-client Window mode selector to the placement controls. Windowed uses the Windows work area; Fullscreen windowed uses full monitor bounds. Mode changes preserve exact half-screen presets and otherwise refit the chosen display. Fit client, snapping and the preview use that saved choice. Covered taskbar segments are subtracted from the client preview only; physical monitor/work-area geometry and Windows display editing stay accurate.
+Installed and reopened 1.6.0. Existing settings and exact client coordinates were verified unchanged, with only the default Windowed property added to older slots.
+Release build completed with zero warnings/errors. All 135 regression checks passed, including negative monitor positions, all taskbar edges, odd-width half splits, moved displays, auto-hidden taskbars, partial/full taskbar coverage, independent persistence and legacy geometry preservation. UI checks exercised the selector and rendered both modes at the minimum workspace size.
+All 16 local launcher-fixture checks passed, including actual visible window edges matching full-monitor bounds and work-area bounds without extra launches. No real WoW windows were moved or real game graphics settings changed by testing. The option controls placement; the game graphics mode and actual taskbar stacking remain managed by WoW/Windows.
+
+HoverDeck 1.5.4 verification — 2026-10-25
+
+Removed desktop-login confirmation prompts from Start clients and Check launcher selection, and removed the launcher's confirmation callback. Launch attempts use the currently signed-in desktop Battle.net launcher. Saved connection/license validation remains, and missing launcher selections produce errors instead of confirmation prompts. Matching a displayed WoW account label does not verify the owner of the desktop Battle.net login; web connections do not switch that login.
+Installed and reopened 1.5.4; saved settings were verified unchanged.
+Release build completed with zero warnings/errors. All 119 regression checks and 14 local launcher-fixture checks passed, including connected accounts launching without a confirmation callback, missing accounts/versions sending no Play, cancellation, automatic process tracking, pending-launch reuse and no duplicate launches when clients are already tracked. No real game authentication or Blizzard account interaction was performed by these checks.
+
+HoverDeck 1.5.3 verification — 2026-10-25
+
+Removed the Window assignment tab and its manual window enumeration, picker, assignment/clear handlers and editor-specific duplicate-assignment check. Client editing now has Launch and Advanced tabs for Battle.net. Automatic process tracking and pending-launch protection remain in the launcher.
+Updated launcher errors and current instructions to remove references to deleted controls. An untracked external client must be closed before Start clients launches the selected account.
+Installed and reopened 1.5.3; saved settings were verified unchanged.
+Release build completed with zero warnings/errors. All 119 regression checks and 15 local launcher-fixture checks passed, including automatic tracking, reuse after restart, filling missing clients, pending-launch reuse and the external-client guard. The revised editor was rendered and visually checked; menu/dialog and local WebView2 checks passed. No real WoW clients were launched or Blizzard accounts accessed by the checks.
+
+HoverDeck 1.5.2 verification — 2026-10-25
+
+Release publish completed with zero warnings/errors. 119 self-checks passed, including actual management-button actions with synthetic settings: canceling removal, account removal across saved layouts, per-login/per-region isolation, clearing stale window bindings and pending selections, preserving geometry/version, dropdown removal, persistence across restart/refresh, explicit restore, failed cleanup retaining the connection, complete login removal and empty-state controls.
+The account-management dialog was rendered and visually checked. The existing menu/dialog and local WebView2 checks passed.
+Installed and reopened 1.5.2 successfully. A structural comparison confirmed existing settings were unchanged, with only the new empty removed-account lists added.
+All six isolated privacy checks passed. A synthetic cookie and local-storage marker were created only in an isolated test profile; the same AllProfile cleanup used by Remove login cleared both. The API response remains hidden through successful and failed imports. No real account was removed and no real browser sign-in was accessed by these tests.
+
+HoverDeck 1.5.1 verification — 2026-10-25
+
+Release build: zero warnings/errors. 106 regression checks passed, including PTR imports, unknown region preservation, partial invalid responses and retaining a saved account list when every returned WoW entry is unusable.
+Isolated WebView2 privacy checks passed with all network requests intercepted by synthetic local fixtures:
+- Browser-side projection excludes synthetic subscription, payment and address fields before returning data to application code.
+- EU and PTR licenses import together.
+- The actual interactive import window hides the response before navigation and closes after cache cleanup on success.
+- Import failure leaves only a plain error visible, keeps the response hidden and clears cache/history when closed.
+- WebView2 disk-cache, CacheStorage and browsing-history cleanup APIs completed successfully.
+The older application's saved settings had no imported accounts or raw account-response markers and no app log containing the response. Cache/history cleanup completed for both HoverDeck browser profiles. Sign-in cookies were retained, and the active unfinished connection was recovered by its profile directory ID without reading cookies or account pages.
+No real Blizzard account response was fetched by the development checks. The user can retry the retained connection through Settings > Battle.net connections > Refresh. Successful real import still needs that retry.
+
+HoverDeck 1.5.0 verification — 2026-10-25
+
+Release publish completed with zero warnings/errors. 103 regression checks passed. New editor checks cover separate Launch / Window assignment / Advanced tabs, direct-client controls, isolated draft editing and saving a client name/executable without modifying the original before commit.
+The main workspace was rendered at 1330x930 and its 1080x760 minimum. Both preserve visible placement controls and primary actions. Shared configuration and direct-launch paths are removed from the workspace. Display editing uses a separate mode; client launch actions are hidden there. The activity log starts collapsed.
+Battle.net, direct-client, assignment and advanced tabs, folder management, account connections, hover preferences and direct-launch defaults were rendered and visually inspected. Hover preferences, direct defaults and account management were also opened/closed through their actual menu handlers using synthetic settings.
+The local Battle.net coordinator fixture passed all 15 checks, covering launch/reuse, missing accounts, pending attempts, unknown windows, multi-connection confirmation and no duplicate Play. It used real local fixture windows with a fake launcher; no games were launched or Blizzard services contacted.
+The packaged WebView2 local-page smoke check passed. No real credentials or browser sessions were accessed. Existing saved configuration is preserved during the app replacement; the shareable ZIP excludes settings, browser profiles and build caches.
+Real Blizzard sign-in, account import and game authentication still require the user's own test. This UI update changes navigation and presentation, not the underlying launcher login implementation.
+
+HoverDeck 1.4.1 verification — 2026-10-25
+
+Release publish completed with zero warnings/errors. 100 regression checks passed.
+Root-folder coverage: one WoW root discovers multiple sibling versions, including a metadata-identified version whose folder/name is not hard-coded. Choosing a version subfolder normalizes to the root and scans its siblings. Older per-slot executable paths seed the root library once; a deliberately emptied library stays empty. The editor displays the selected roots and all discovered versions while resolving executable paths automatically.
+Read-only scan of the local World of Warcraft root detected three installed versions: World of Warcraft Classic, WoW: Forever and WoW: Forever - Beta. All three share the same detected parent folder. No game files were modified or games launched.
+Revised launch/folder dialogs rendered and visually checked. The packaged WebView2 local-page check also passed. Account login and launch coordination are unchanged from 1.4.0; real Blizzard account import remains unverified until the user signs in.
+
+HoverDeck 1.4.0 verification — 2026-10-25
+
+Release publish: Windows x64 / .NET 8, zero warnings and errors. Framework-dependent single executable includes the WebView2 loader; .NET Desktop and Edge WebView2 runtimes are prerequisites.
+94 regression checks passed against the packaged executable. New cases cover multiple installation folders, metadata headers, inactive/missing versions, repeated copies, per-connection account lists, same-label license isolation, selection invalidation, persisted IDs, older profiles, endpoint origin restrictions and browser-profile path validation.
+Local Battle.net fixture checks passed using a fake gateway and real local test windows. Existing reuse, missing-client launch, pending-attempt recovery and duplicate prevention still pass. Added cases verify confirmation before Play, cancellation before any launch, distinct WoW1 clients under two connections, A→B→A confirmation order and reusing bound clients without another confirmation or launch.
+Final packaged WebView2 smoke test passed: initialized the installed runtime, rendered a local HTML page and read it successfully. No Blizzard website, account session or sign-in was used by this test.
+Launch settings, folder manager and connection manager were rendered and visually checked. Save/Done controls remain visible; the launch settings content scrolls on smaller displays.
+Real Blizzard sign-in/account import and successful game authentication were not tested. The account importer uses Blizzard's account website and may need compatibility updates; desktop launch selection still uses the English Battle.net controls. The user must switch and confirm the intended desktop launcher login.
+
+Earlier verification for unchanged display, hover and private-login behavior follows.
+
+HoverDeck 1.3.1 verification — 2026-10-25
+
+Publish: Windows x64 / .NET 8, no compiler warnings or errors.
+Self-checks: 82 passed. Nine new regression checks cover shared refreshed account choices, independent slot selections, unchanged saved assignments when a dialog is opened, settings persistence, per-version account lists, replacing stale discovery and older-settings compatibility.
+The regression checks instantiate separate launch-settings dialogs without showing them or accessing Battle.net. A second dialog receives the discovered options immediately, and a deserialized settings catalog retains each version's account list.
+Battle.net selection, Play coordination, private-server login and window placement logic are unchanged from 1.3.0.
+
+Previous verification follows.
+
+HoverDeck 1.3.0 verification — 2026-10-25
+
+Build: Release, Windows x64, .NET 8. Publish completed with no compiler warnings/errors.
+Self-checks: 73 passed, including previous-profile compatibility, exact account/region matching, persistent process identity, layout geometry, private-login safeguards and display rollback.
+Local Battle.net coordination fixture: PASSED. Uses a fake Battle.net gateway and real local test windows; no Blizzard authentication.
+- Two selected accounts cause exactly two launch requests and receive distinct process bindings.
+- Saved/deserialized assignments are reused after restarting the launcher coordinator.
+- Closing one window launches only its missing account.
+- Cancel after Play preserves a pending attempt; retry after restart waits without a second Play.
+- Unknown existing clients block duplicate launches until explicitly assigned.
+- An unavailable exact account label never launches another account or region.
+Live Battle.net refresh: loaded 10 game versions and 3 actual account labels with regions, including a Starter Edition suffix.
+Live Battle.net account selection: PASSED. Selecting another refreshed account and using Check Battle.net selection changed and verified the launcher selection without pressing Play.
+Real game launch/authentication: not exercised. Blizzard authentication, loading prompts, concurrent-session rules and client graphics settings remain controlled by Battle.net/WoW.
+
+Earlier verification history follows; those checks were recorded for the versions stated below.
+
+HoverDeck verification — 2026-10-25
+
+Build: Release, Windows x64, .NET 8; zero compiler warnings and errors.
+
+Matching and layout checks:
+PASS: Identical executable names from different folders remain separate
+PASS: Existing positions map to corresponding slots
+PASS: Each process fills at most one slot
+PASS: Only missing slots require launching
+PASS: Live bindings survive manual window moves
+PASS: Reused process IDs do not revive stale bindings
+PASS: Multiple HWNDs from one process are deduplicated
+PASS: Path matching ignores Windows path case
+PASS: Empty executable paths never match
+PASS: Negative-coordinate display layouts are valid
+PASS: Disconnected display placements are rejected
+PASS: Only a tiny offscreen sliver is insufficient
+PASS: Profiles round-trip paths, negative coordinates and zero delay
+13 tests passed.
+
+Windows integration checks:
+PASS: Initial fixture opened
+Test 1: placed at 2600, 60 · 620 × 400.
+Opening Test 2…
+Test 2: placed at 3260, 60 · 620 × 400.
+Ready · reused 1, opened 1, matched 2/2.
+PASS: Fill missing launches exactly one additional client
+PASS: Real window geometry matches both requested rectangles
+Test 1: placed at 2600, 60 · 620 × 400.
+Test 2: placed at 3260, 60 · 620 × 400.
+Ready · reused 2, opened 0, matched 2/2.
+PASS: Repeated Start reuses both clients without duplicates
+Test 1: placed at 2600, 60 · 620 × 400.
+Opening Test 2…
+Test 2: placed at 3260, 60 · 620 × 400.
+Ready · reused 1, opened 1, matched 2/2.
+PASS: Closing one client causes only its missing slot to refill
+PASS: Native hover delay and no-raise mode are configured
+PASS: Zero-delay mode is accepted by Windows
+PASS: Disabling focus turns active tracking off
+PASS: Original Windows hover settings are restored on exit
+PASS: Hotkey registers globally
+Integration checks passed.
+
+Finished app UI and real WoW checks:
+PASS: Detected three displays with their physical geometry.
+PASS: Captured and saved both current WoW executable paths and rectangles.
+PASS: Ctrl+Alt+H toggled hover focus on and then off in the finished executable.
+PASS: Start reused both original WoW process IDs and opened zero additional clients.
+PASS: Both WoW windows retained their captured X, Y, width and height.
+Visual check: no clipped subtitle; both overlapping client labels remain visible.
+Scope: native hover configuration, delay and restoration were tested. Actual in-game keyboard response and hover latency were not measured; no gameplay inputs were sent.
+
+Version 1.0.1 — taskbar visualization:
+PASS: Release build completed without compiler warnings or errors.
+PASS: Visual check shows the 48-pixel reserved taskbar strips on all three displays, with labels and a legend.
+PASS: Fit screen shows that it excludes the taskbar.
+PASS: Saved layout and preferences are byte-for-byte unchanged after the update.
+
+Version 1.0.2 — live Windows desktop geometry:
+PASS: Release build completed without compiler warnings or errors.
+PASS: Direct Win32 monitor enumeration matches current display origins and work areas.
+PASS: Visual verification shows separate left-display taskbar coordinates (1398–1446) and other-display coordinates (1392–1440).
+PASS: Client rendering is clipped to actual usable desktop regions; an off-screen client no longer extends the drawn display edge.
+PASS: Saved layout/preferences remain byte-for-byte unchanged.
+Display refresh listens for Windows display/settings/DPI messages and also rereads monitor geometry every 1.5 seconds.
+The following regression checks use simulated changing desktop snapshots; Windows display settings were not moved during testing:
+PASS: Per-monitor taskbar retains the left display's six-pixel vertical offset
+PASS: Live desktop detects a monitor move with unchanged resolution
+PASS: Moved display's taskbar follows its new origin by 400 pixels
+PASS: Unmoved display's taskbar remains at its own position
+PASS: Unchanged snapshots do not trigger unnecessary layout refreshes
+PASS: Work-area-only changes trigger refresh
+PASS: No reserved taskbar space is invented when Windows reserves none
+PASS: A left-side taskbar uses Windows' actual edge and width
+PASS: Client overflow does not redefine the monitor boundary
+PASS: Disconnecting a monitor updates the live snapshot
+23 tests passed.
+
+Version 1.0.3 — restore full client geometry:
+The work-area clipping introduced in 1.0.2 was a visual regression and has been removed.
+PASS: Rendering regression check confirms that a client bottom edge and resize handle below a monitor remain visible.
+PASS: Rendering and restarting leave the saved client coordinates unchanged.
+PASS: Release build and all 25 checks passed.
+Live monitor/work-area updates remain enabled; no WoW windows were moved during this change.
+
+Version 1.1.0 — Windows display arrangement editor:
+PASS: Release single-file build completed with zero compiler warnings/errors.
+PASS: All 37 automated checks passed (including monitor geometry, taskbar offsets, edge snapping, primary-coordinate normalization, invalid arrangements, simulated partial-apply rollback, and confirmation timeout).
+PASS: Native current and registered positions were read from Windows.
+PASS: Read-only CDS_TEST accepted existing graphics modes; current and alternative-primary geometry passed validation.
+PASS: UI dragging updates the preview and enables Apply without changing Windows positions.
+PASS: Exact Y entry and primary selection update the preview.
+PASS: Reset restores the current monitor snapshot and disables Apply.
+PASS: Saved client settings/preferences are byte-for-byte unchanged after upgrading and testing.
+Scope: Actual changed display positions, native rollback after a changed topology, and watchdog crash recovery were not exercised on this desktop. Windows display positions and primary were left unchanged. Failure restoration uses a simulated backend in automated tests; the countdown dialog was tested directly.
+Display changes use staged ChangeDisplaySettingsEx updates followed by one commit. A 20-second confirmation and independent recovery process are implemented.
+
+Version 1.1.1 — visible window edges and gap correction:
+Cause measured on both real WoW HWNDs: GetWindowRect included invisible resize margins (7 px left/right/bottom), while the preview treated the same rectangle as visible content.
+Fix: live capture and verification now use DWM visible frame bounds. Placement compensates SetWindowPos with each HWND's measured invisible margins. Values are not hardcoded to this PC's 7 px. A dashed live outline and footer mismatch count distinguish actual windows from saved placements.
+PASS: Release build succeeded with zero compiler warnings/errors.
+PASS: All 42 self-checks passed, including measured WoW margins, negative display coordinates, borderless windows, different/asymmetric margins, and invalid DWM frames.
+PASS: Real temporary-window integration checks passed: exact visible placement, fill missing/reuse/replacement, minimized/maximized restoration, hover restoration, hotkey registration.
+PASS: Applied saved layout to the original two WoW process IDs; opened zero new clients.
+PASS: Independent Win32/DWM measurements show Client 1 visible rectangle (0,0)-(2560,1392), exactly matching its saved placement.
+PASS: Client 2 visible rectangle (-1440,286)-(0,1769), exactly matching its saved placement.
+PASS: Saved layout/settings remain byte-for-byte unchanged.
+PASS: The app initially reported two live placement differences, then no differences after Apply positions.
+The visible frame includes title bars and visible borders; the game rendering area is not stretched over those decorations. Windows monitor positions were not changed.
+
+Version 1.2.0 — per-client private-server login:
+PASS: Release build completed with zero compiler warnings/errors; all 56 self-checks passed.
+PASS: Each client slot has independent account/password, startup wait, auto-login preference, and calibrated login-screen fields/marker.
+PASS: Windows user DPAPI round-trips test credentials; saved JSON contains neither plaintext account nor plaintext password.
+PASS: Malformed protected credentials, blank markers, wrong screens and different client sizes are rejected.
+PASS: Local fixture input replaces remembered values correctly, including literal symbols and Unicode, and clicks Submit once.
+PASS: A changed screen receives no credentials; losing foreground focus stops before password entry/submission.
+PASS: Launcher integration queues only newly created client identities for auto-login; repeated Start/reused clients queue no login.
+PASS: Temporary-window launch/reuse/replace, visible-edge placement, minimized/maximized restoration, hover recovery and global-hotkey checks passed.
+PASS: Installed UI shows Login… for the selected client; login settings dialog rendering was inspected with empty fields.
+PASS: Existing layouts/preferences are byte-for-byte unchanged after installation.
+Scope: Login input was tested against a local dummy form with fixture credentials and no network. Actual private-server authentication has not been tested. The user must enter credentials and calibrate each client at its login screen. Server prompts/2FA/character selection and Battle.net launch integration remain manual.
+Credentials are never supplied on the command line or clipboard or included in application logs. Release archive snapshots exclude saved login profiles.
+
+Version 1.2.1 — login setup dialog repair and simpler setup:
+Cause: hiding the modal login form ended ShowDialog while its async click handler was still running. Its owner disposed it and resumed hover focus; capture lost focus, then Show() threw ObjectDisposedException.
+Fix: setup returns an encrypted draft and closes synchronously. The editor owns capture/picker work after that form is disposed, then opens a fresh dialog. Hover stays suspended for the entire operation; settings change only after Save.
+PASS: Release build completed without compiler warnings/errors.
+PASS: 60 self-checks passed, including legacy custom-position profiles and saved keyboard-navigation profiles.
+PASS: Actual desktop dummy-client test exercised the full modal dialog -> capture -> picker -> new dialog -> Save flow without disposal/focus errors.
+PASS: Encrypted draft survives setup; Cancel from the picker reopens the dialog and Cancel from details leaves the saved profile unchanged.
+PASS: Two-click setup (account field + fixed login marker) uses Tab to Password and Enter to submit, with literal symbols and Unicode preserved.
+PASS: Existing explicit field/button login continues to work.
+PASS: Wrong-screen, changed-size and focus-loss guards still stop credential entry.
+PASS: Login dialog rendering inspected with empty fields.
+Scope: Tests used a local dummy client with generated fixture credentials; no real account/server login was attempted. The simplified mode requires the client's Tab/Enter behavior described in the UI; custom positions remain available. One-time screen recognition is still required, and must be repeated if size or login layout changes.
+PASS: Installed and reopened 1.2.1; both current WoW clients remain matched. Layouts, preferences and encrypted login settings are byte-for-byte unchanged after the update.
+
+
+
+
+
+
+

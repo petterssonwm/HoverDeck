@@ -1,0 +1,137 @@
+HOVERDECK 1.7.0 — WoW workspace
+
+Open HoverDeck.exe. Requires Windows x64, .NET 8 Windows Desktop Runtime and Microsoft Edge WebView2 Runtime.
+Downloads: https://dotnet.microsoft.com/download/dotnet/8.0 and https://developer.microsoft.com/microsoft-edge/webview2/ (Evergreen Runtime).
+Keep HoverDeck in a writable folder. Layouts and preferences live in Data\settings.json beside the executable.
+The shareable ZIP contains clean starting settings. Do not share your own Data folder or browser profiles.
+
+INSTALLING AND UPDATES
+
+Installer: download HoverDeck-win-Setup.exe from the project's GitHub Releases page and run it. It installs for your Windows account only (no administrator rights needed), adds Start menu and desktop shortcuts, and installs the .NET 8 Desktop Runtime and WebView2 if they are missing. The installer is not code-signed yet, so Windows may show "Windows protected your PC" the first time: choose More info, then Run anyway.
+Updates: an installed HoverDeck checks for a new version a few seconds after it starts and asks before updating; Settings > Check for updates does the same on demand. Updating closes HoverDeck, installs the new version and reopens it. It never updates while clients are being launched or placed.
+Settings: installed copies keep layouts and preferences in %LOCALAPPDATA%\HoverDeck\Data, so updates and uninstalling keep them. The portable ZIP keeps them in Data beside HoverDeck.exe and does not update itself.
+Publishing (for the maintainer): in the Source folder run .\release.ps1 -Version x.y.z -Notes "what changed". It builds, packs and publishes a GitHub release; installed copies pick it up automatically.
+
+WHERE THINGS LIVE
+
+Main workspace: the left sidebar holds the saved layout, the number of clients (− / +) and one card per client showing its account and whether it is OPEN or PLANNED. The selected layout's name is shown above the display map; arrange the client rectangles on the map. Select a client to edit its Window mode and X/Y/width/height below the map. Fit client offers Fit screen, Left half and Right half for the selected display. Edit client opens its launch/login setup; double-clicking a client card does the same.
+
+The top bar works as the window's title bar: drag it to move HoverDeck, double-click it to maximize, and use the minimize / maximize / close buttons at its right end. The window edges resize and Windows snap works as usual. Minimize still hides HoverDeck to the notification area.
+
+Layout menu: New, Save a copy, Capture open clients, Direct-launch defaults and Exit.
+Settings menu: WoW folders, Battle.net connections and Hover focus. These are shared across all layouts and clients.
+View menu: show or hide the Activity log. It is collapsed initially to leave more room for the map.
+Clients / Arrange displays / Identify (above the map): switch between editing client positions and arranging the Windows displays, or show each display's number on its screen. The display map refreshes from Windows automatically.
+
+The hover-focus toggle is at the top right; hover over it to see its shortcut. Start clients (bottom of the sidebar) fills missing slots and moves every open client into place, while reusing assigned clients. While it runs, its progress and a Cancel button replace it; Cancel leaves already-opened clients running. The arrow on Start clients opens Close clients (closes this layout's open clients as if you clicked each window's X, after a confirmation; nothing is force-killed) and Restart clients (closes them, then runs Start clients). A client that is still running after 30 seconds, for example because the game shows a prompt, is reported for you to close yourself. Apply positions appears under Edit client whenever an open client's window is not where the map says (for example after you drag it); it moves open clients into place without launching or logging into any games.
+
+CLIENT EDITOR
+
+Launch: client name, launch method and its essential choices.
+- Battle.net: installed WoW version, saved Battle.net connection, and WoW account/region. Shared folders and logins are managed in Settings, not in each client editor.
+- Direct / private server: inherit the layout default executable or choose an override for this client. Configure private-server login opens the credential/screen setup. Launch arguments are configured under Layout > Direct-launch defaults.
+
+Advanced (Battle.net): change the launcher version label when necessary, check the selected account without pressing Play, and refresh legacy launcher choices for an older profile. Shared web account lists refresh in Settings > Battle.net connections.
+
+Client edits apply when you save. Cancel leaves the saved client unchanged. For private-server login, the credential editor has its own Save / Save & log in action. Changing a Battle.net account, version or installation clears that client's old window assignment.
+
+BATTLE.NET SETUP
+
+1. Settings > WoW folders: add the World of Warcraft root folder once. Every installed version inside it is detected from installation metadata and an existing WoW executable. Add more roots for other drives/installations. Selecting a version subfolder expands to its parent and includes sibling versions. Save folders shares the list with all clients.
+2. Settings > Battle.net connections: Add login, give it a recognizable name, sign in yourself on Blizzard's page, then Finish connection — import WoW accounts. Each named connection uses a separate saved web session. Refresh updates the selected connection; Sign in / import handles expired sessions. Repeat for other Battle.net logins.
+3. Select a client, choose Edit client, and use its Launch tab to choose Battle.net, an installed version, a connection, and its WoW account/region. Save, then repeat for each client.
+4. Press Start clients. HoverDeck attempts to select each configured WoW version and account in the currently signed-in desktop Battle.net launcher and then presses Play. There is no login-confirmation popup. Missing versions/accounts, unavailable launcher controls and launch failures show an error. Existing tracked clients are reused.
+
+REMOVING SAVED ACCOUNTS
+
+Settings > Battle.net connections shows logins on the left and the selected login's WoW accounts on the right.
+- Remove account removes the selected WoW license from all client dropdowns and clears its selection/window assignment in every saved layout. Refresh keeps it removed. Show removed accounts > Restore account makes it available again; choose it again for any client that needs it.
+- Remove login removes the whole connection, its WoW choices and its saved embedded-browser sign-in data. Every client using it has its connection/account selection and window assignment cleared. If browser cleanup fails, the connection is kept so you can retry.
+Affected clients show Choose an account and require a new selection before launching. Client positions, installed versions and other connections are retained. These actions only remove HoverDeck configuration; they do not delete Blizzard accounts or close running games.
+
+Local folders identify installed versions, not ownership. The saved web session supplies the license list; WoW1 under one connection is kept separate from WoW1 under another in saved settings. Launching uses the currently signed-in desktop Battle.net login. The website session does not switch it, and matching a WoW account label does not verify which Battle.net login owns it. Battle.net and WoW handle actual game authentication.
+
+The installed-version dropdown resolves executable paths automatically. If there are several copies of the same version, their root paths distinguish them. Battle.net starts the installation registered in its own launcher: use its locate/install options to register the copy you intend to run. HoverDeck matches the selected executable path and does not silently assign a window from another folder.
+
+Keep the desktop Battle.net launcher open, signed in and in English. Its version/account availability is checked before Play. Holding Escape or switching away stops further launcher input. Complete authentication, updates, game prompts, two-factor checks and character selection yourself.
+
+After a launch, HoverDeck saves the process identity and places the new window. Start clients reuses the tracked processes across restarts. It does not inspect the account inside an already-running game. If a client was opened outside HoverDeck and is not tracked, close it and use Start clients to launch the selected account. Manual window assignment is not supported.
+
+An attempt is saved before Play. Cancel or a restart will not press Play twice: retry waits for the pending window. Complete any launcher prompts, then use Start clients to resume waiting. Normal Battle.net/WoW authentication and concurrent-session limits still apply.
+
+Older per-client executable selections seed their WoW root once, and Edit client refreshes its installed versions. Intentionally removing all roots leaves the library empty. Legacy launcher-refreshed account setups remain available as Current launcher / existing setup; select a named web connection to migrate that client.
+
+Account import uses Blizzard's signed-in account website, not a guaranteed public developer API, and can require compatibility updates. WebView2 keeps separate session cookies in %LOCALAPPDATA%\HoverDeck\WebProfiles\<connection-id>. These remain local to the Windows account and outside the portable folder. HoverDeck does not read login fields, passwords or authentication tokens.
+
+Real Blizzard account import and successful game authentication remain unverified until you sign in. Development tests use synthetic account responses, a local WebView2 page and a fake launcher with local test windows.
+
+DIRECT / PRIVATE-SERVER SETUP
+
+Layout > Direct-launch defaults sets a common game executable and launch arguments. In Edit client, select Direct / private server and either inherit that default or select an executable for this slot.
+
+To configure login:
+1. Open/place the intended client and leave it on its username/password login screen.
+2. Edit client > Launch > Configure private-server login. Enter its credentials directly in HoverDeck.
+3. Set up login screen: select the account field and a detailed fixed label/logo. The default uses Tab to reach Password and Enter to submit. Custom positions can select the password field and login button instead. Avoid editable fields, animations and buttons for the fixed marker.
+4. Save, or use Save & log in for the selected open client.
+
+Startup wait and login-on-launch belong to each slot. Only newly launched direct clients are eligible for automatic login; reused clients and Apply positions never trigger it. An already-loading client started outside HoverDeck is reused without entering credentials.
+
+Login checks the executable, process identity, client size, fixed screen marker and foreground window before typing. Changing the game size/UI or executable may require screen setup again. Hover focus pauses during setup/login. Escape, changing focus or Cancel stops further input. There are no automatic password retries or game-input broadcasts. The game authenticates with its own server; HoverDeck reports submission rather than claiming authentication succeeded.
+
+Credentials are encrypted with Windows DPAPI for the current Windows account. Only encrypted data is saved; passwords are not placed in command arguments, logs or the clipboard. A copied layout normally needs credentials entered again on another Windows account/PC. Clear login removes the saved login/setup for that slot. Battle.net clients never use private-server credentials.
+
+LAYOUT AND MATCHING
+
+Each client has a Window mode selector next to its placement controls:
+- Windowed: Fit client and snapping use the usable work area, leaving room for the taskbar.
+- Fullscreen windowed: Fit client and snapping use the full display, including the taskbar area. Clients overlapping the taskbar are kept above it while a tracked WoW client has keyboard focus, including partial-screen clients. Switching to another app or Windowed mode restores the window's original topmost state. This works independently of the hover-focus toggle.
+Changing modes refits the selected client on the chosen display. An exact Left half or Right half preset stays on that half; other placements refit to the full chosen area. Afterwards you can drag, resize or enter custom coordinates as usual. Click Apply positions to move an already-open client, or Start clients to launch/place the layout. The setting is saved separately for each client. It controls HoverDeck placement and does not edit WoW's graphics settings or Windows taskbar settings; select the game's own graphics mode inside WoW.
+
+Taskbar coverage changes only the relevant game windows' stacking, without moving them or taking keyboard focus. It releases coverage while HoverDeck is performing launch/login setup. Original window states are restored on exit; the existing recovery watchdog also restores changes after a crash using HWND, process ID and process-start identity. Windows already marked topmost by WoW retain that original setting.
+
+Drag client rectangles and resize their bottom-right corners, or enter exact X/Y/width/height. Hold Ctrl to move without snapping. Layout edits save automatically. Reducing the client count removes slots but does not close running games. Older layouts retain their exact coordinates and default to Windowed until you change the option.
+
+The map reads live Windows display bounds and work areas, including negative coordinates and portrait screens. Gold taskbar strips reflect each monitor's actual reserved area. In the client preview, only portions covered by fullscreen-windowed client rectangles are hidden. Arrange displays always shows the complete real reserved area. Connecting, moving, rotating or resizing displays in Windows refreshes the map automatically. Physically moving a screen on your desk must also be reflected in Windows display settings.
+
+Solid client rectangles are saved placements. Dashed outlines show actual open-window edges when they differ. Visible-frame measurements compensate for invisible Windows resize margins. Client rectangles include their full saved size, even outside a monitor. Both windowed and fullscreen-windowed clients can be placed when that WoW version accepts external resizing. Apply positions can reapply the layout after loading.
+
+Direct clients match by full executable path and live process identity. Unbound direct clients use saved geometry to choose a slot; this does not identify the account/character inside the game. Battle.net tracks the processes it launches. The launcher waits up to 90 seconds and remembers pending attempts so retries do not automatically create duplicates.
+
+On the first launch with clean settings, HoverDeck captures open WoW windows. Layout > Capture open clients updates the layout from current positions while retaining login settings for matched slots. New and Save a copy create separate named layouts.
+
+WINDOWS DISPLAY ARRANGEMENT
+
+Arrange displays (above the map) opens a dedicated editing mode. The client sidebar and launch actions are hidden. Use Identify to match screens, drag them or enter X/Y, optionally select Primary display, then Apply to Windows. Confirm Keep changes within 20 seconds or the prior arrangement is restored. Reset reloads the current Windows arrangement. Clients discards the unapplied preview and returns to client layout editing.
+
+Monitor edges must touch without overlapping. The primary display is normalized to (0,0). Zoom and origin stay fixed while editing; Fit view explicitly reframes the preview. Per-monitor taskbar strips move with their display. Windows positions change only after Apply; a recovery process restores the original arrangement if confirmation expires or HoverDeck exits unexpectedly during it.
+
+This edits extended-desktop positions and the primary monitor. Resolution, rotation, scaling, refresh rate and duplicate/extend mode remain in Windows settings. Saved client coordinates do not automatically move with the screens. Reposition clients or capture them again if Windows moves their windows after a display change.
+
+HOVER FOCUS
+
+Use the main toggle or the saved global hotkey. Settings > Hover focus adjusts the delay from 0 to 5000 milliseconds and changes the shortcut; Ctrl+Alt+H and 50 ms are the defaults. Actual timing follows native Windows activation.
+
+Only game executable paths configured in saved layouts are eligible. Hover focus gives keyboard focus without clicking or typing and uses Windows' no-raise tracking mode. Fullscreen-windowed taskbar coverage separately adjusts the relevant game windows' stacking while WoW is active. Hover focus pauses while mouse buttons are held and while launch/login setup is active.
+
+While HoverDeck is open it manages system-wide active-window tracking. OFF pauses it. Minimize keeps HoverDeck and its shortcut in the notification area. Exit restores the original hover tracking, delay and raise settings. A separate watchdog also restores them after a crash. Changes are for the current Windows session, not permanent profile changes.
+
+If a game runs as administrator, run HoverDeck at the same permission level if Windows prevents window placement.
+
+SOURCE AND CHECKS
+
+Source and dependency notices are included. Build with a Windows .NET SDK:
+dotnet build Source\HoverDeck.csproj -c Release
+
+Framework-dependent single executable:
+dotnet publish Source\HoverDeck.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:EnableSingleFileAnalyzer=false -p:EnableTrimAnalyzer=false -o build
+
+Publish outside the app's source/output directory and close the running app before replacing it. Verification.txt records the checks and their limits.
+
+ACCOUNT IMPORT PRIVACY FIX (1.5.1)
+
+The account API document is hidden before navigation and stays hidden after errors. A browser-side projection extracts only WoW license names, region labels and stable account IDs; subscription, payment and address objects are excluded before application code receives the result. The raw response is never used as a visible page or saved in application settings/logs.
+
+HoverDeck clears its embedded browser disk cache, CacheStorage and browsing history when opening/closing a connection. Sign-in cookies are retained. PTR and beta regions are supported; new region labels stay distinct. Incomplete license entries are reported without blocking valid accounts. An entirely unusable response leaves the prior account list intact.
+
+A connection is saved before sign-in begins, so a failed/canceled import can be resumed through Sign in / import or Refresh. The Finish connection button is highlighted above the sign-in page.
