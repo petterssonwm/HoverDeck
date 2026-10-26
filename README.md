@@ -13,7 +13,7 @@
   <a href="https://github.com/petterssonwm/HoverDeck/releases/latest"><b>Download the latest version</b></a>
 </p>
 
-![HoverDeck workspace](docs/screenshot.png)
+![HoverDeck workspace](docs/hoverdeck-workspace.png)
 
 ## What it's for
 
