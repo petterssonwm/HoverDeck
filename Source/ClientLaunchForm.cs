@@ -26,7 +26,7 @@ internal sealed class ClientLaunchForm : Form
         root.RowStyles.Add(new(SizeType.Absolute, 45)); root.RowStyles.Add(new(SizeType.Percent, 100)); root.RowStyles.Add(new(SizeType.Absolute, 65)); root.RowStyles.Add(new(SizeType.Absolute, 40)); Controls.Add(root);
         var nameRow = Row(); nameRow.Controls.Add(Label("Client name", 30, 105));
         var name = new TextBox { Text = draft.Name, Width = 460, MaxLength = 80, Name = "ClientName" }; nameRow.Controls.Add(name); root.Controls.Add(nameRow, 0, 0);
-        var tabs = new TabControl { Dock = DockStyle.Fill, Name = "ClientEditorTabs", Padding = new(16, 7) }; root.Controls.Add(tabs, 0, 1);
+        var tabs = new DarkTabControl { Dock = DockStyle.Fill, Name = "ClientEditorTabs", Padding = new(16, 7) }; root.Controls.Add(tabs, 0, 1);
         var launch = Page("Launch"); var advanced = Page("Advanced"); tabs.TabPages.Add(launch.Page);
         launch.Body.Controls.Add(Label("Launch method")); method.Items.AddRange(new object[] { "Direct / private server", "Battle.net" }); method.SelectedIndex = (int)slot.LaunchMethod; launch.Body.Controls.Add(method);
         var host = new Panel { Width = 600, Height = 280, Margin = Padding.Empty }; launch.Body.Controls.Add(host);
@@ -62,7 +62,7 @@ internal sealed class ClientLaunchForm : Form
         var save = Button("Save", 110); save.Name = "SaveLaunch"; var cancel = Button("Cancel", 110); cancel.DialogResult = DialogResult.Cancel;
         var delete = Button("Delete", 110); delete.Name = "DeleteClient"; delete.ForeColor = Color.FromArgb(255, 128, 118); delete.Enabled = layout.Slots.Count > 1;
         delete.Click += (_, _) => { DialogResult = DialogResult.Abort; Close(); }; // Abort = delete this client (the main window asks to confirm)
-        actions.Controls.AddRange(new Control[] { save, cancel, delete }); root.Controls.Add(actions, 0, 3); AcceptButton = save; CancelButton = cancel; AppTheme.Style(this);
+        actions.Controls.AddRange(new Control[] { save, cancel, delete }); root.Controls.Add(actions, 0, 3); AcceptButton = save; CancelButton = cancel; AppTheme.Style(this); DialogFrame.Apply(this);
         void ShowMethod()
         {
             bool battleNet = method.SelectedIndex == 1; bnet.Visible = battleNet; direct.Visible = !battleNet; (battleNet ? (Control)bnet : direct).BringToFront();

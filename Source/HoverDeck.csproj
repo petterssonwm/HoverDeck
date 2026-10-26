@@ -9,7 +9,7 @@
     <ApplicationIcon>Assets\HoverDeck.ico</ApplicationIcon>
     <AssemblyName>HoverDeck</AssemblyName>
     <RootNamespace>HoverDeck</RootNamespace>
-    <Version>1.7.3</Version>
+    <Version>1.7.4</Version>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <!-- GitHub repository that hosts installer releases (release.ps1 publishes there). -->
     <UpdateRepository Condition="'$(UpdateRepository)' == ''">https://github.com/petterssonwm/HoverDeck</UpdateRepository>

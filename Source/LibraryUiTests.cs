@@ -139,6 +139,7 @@ internal sealed class LibraryUiTests : Form
                         {
                             var dialog = Application.OpenForms.Cast<Form>().FirstOrDefault(f => f != this && f != owner);
                             if (dialog is null) return;
+                            if (dialog.FormBorderStyle != FormBorderStyle.None || !dialog.Controls.OfType<DialogTitleBar>().Any()) throw new Exception(name + " opened with the Windows title bar instead of the HoverDeck frame.");
                             dialog.Update(); using var bitmap = new Bitmap(dialog.Width, dialog.Height);
                             dialog.DrawToBitmap(bitmap, new Rectangle(Point.Empty, dialog.Size)); bitmap.Save(Path.Combine(output, name + ".png"));
                             captured = true; timer.Stop(); dialog.Close();
@@ -150,6 +151,20 @@ internal sealed class LibraryUiTests : Form
                     RenderDialog(((ToolStripMenuItem)menu.Items[1]).DropDownItems[3], "hover-settings");
                     RenderDialog(((ToolStripMenuItem)menu.Items[0]).DropDownItems[4], "direct-defaults");
                     RenderDialog(((ToolStripMenuItem)menu.Items[1]).DropDownItems[1], "connections-menu");
+                    // HoverDeck's own message box, and the frame on every dialog opened above.
+                    bool framedMessage = false;
+                    using (var capture = new System.Windows.Forms.Timer { Interval = 150 })
+                    {
+                        capture.Tick += (_, _) =>
+                        {
+                            var box = Application.OpenForms.Cast<Form>().FirstOrDefault(f => f != this && f != owner); if (box is null) return;
+                            capture.Stop(); box.Update(); using var shot = new Bitmap(box.Width, box.Height); box.DrawToBitmap(shot, new Rectangle(Point.Empty, box.Size)); shot.Save(Path.Combine(output, "message-box.png"));
+                            framedMessage = box.FormBorderStyle == FormBorderStyle.None && box.Controls.OfType<DialogTitleBar>().Any(); box.Close();
+                        };
+                        capture.Start(); ThemedMessageBox.Show(owner, "Delete Client 3?\n\nIts position, launch settings and saved login are removed from this layout. A game that is running is not closed.", "Delete client", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+                    }
+                    if (!framedMessage) throw new Exception("HoverDeck's message box did not open with the HoverDeck frame.");
+                    lines.Add("PASS: messages use HoverDeck's own framed message box");
                     owner.Close();
                 }
                 using var web = new WebView2 { Dock = DockStyle.Fill }; Controls.Add(web);

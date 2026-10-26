@@ -59,12 +59,12 @@ internal static class Program
         }
         if (args.Length >= 3 && args[0] == "--integration-test") { Application.Run(new IntegrationTests(args[1], args[2])); return; }
         using var mutex = new Mutex(true, "Local\\HoverDeck.Application", out bool first);
-        if (!first) { MessageBox.Show("HoverDeck is already running. Open it from the notification area.", "HoverDeck"); return; }
+        if (!first) { ThemedMessageBox.Show("HoverDeck is already running. Open it from the notification area.", "HoverDeck"); return; }
         try { if (!args.Contains("--preview")) DisplayChangeSession.RecoverOnStartup(); Application.Run(new MainForm(args.Contains("--preview"))); }
         catch (Exception ex)
         {
             try { Directory.CreateDirectory(Storage.DirectoryPath); File.AppendAllText(Path.Combine(Storage.DirectoryPath, "error.log"), DateTimeOffset.Now + " " + ex + Environment.NewLine); } catch { }
-            MessageBox.Show(ex.Message, "HoverDeck could not start", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ThemedMessageBox.Show(ex.Message, "HoverDeck could not start", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 }

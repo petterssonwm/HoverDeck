@@ -119,7 +119,7 @@ public sealed partial class MainForm
             if (!keep) session.Revert();
             Log(keep ? "Windows display arrangement kept." : "Original Windows display arrangement restored.");
         }
-        catch (Exception ex) { Log("Display change failed: " + ex.Message); MessageBox.Show(this, ex.Message, "Display arrangement", MessageBoxButtons.OK, MessageBoxIcon.Information); }
+        catch (Exception ex) { Log("Display change failed: " + ex.Message); ThemedMessageBox.Show(this, ex.Message, "Display arrangement", MessageBoxButtons.OK, MessageBoxIcon.Information); }
         finally
         {
             displayApplying = false; mainMenu.Enabled = mainArea.Enabled = true; hover?.Suspend(false);
@@ -136,7 +136,7 @@ internal sealed class DisplayKeepForm : Form
     {
         Text = "Keep this display arrangement?"; ClientSize = new(470, 170); FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = MinimizeBox = false;
         StartPosition = FormStartPosition.Manual; Location = new(screen.X + (screen.Width - Width) / 2, screen.Y + (screen.Height - Height) / 2); TopMost = true;
-        Font = new("Segoe UI", 11); BackColor = AppTheme.Surface; ForeColor = AppTheme.Ink;
+        Font = new("Segoe UI", 11); BackColor = AppTheme.Surface; ForeColor = AppTheme.Ink; DialogFrame.Apply(this);
         var message = new Label { Bounds = new(22, 20, 425, 64) }; Controls.Add(message);
         var keep = new Button { Text = "Keep changes", Bounds = new(166, 112, 132, 36), DialogResult = DialogResult.OK }; AppTheme.Primary(keep);
         var revert = new Button { Text = "Revert", Bounds = new(312, 112, 132, 36), DialogResult = DialogResult.Cancel, FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonFace, ForeColor = AppTheme.Ink }; revert.FlatAppearance.BorderColor = AppTheme.ButtonBorder;

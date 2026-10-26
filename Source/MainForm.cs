@@ -94,6 +94,7 @@ public sealed partial class MainForm : Form
     }
     private static void Theme(Control parent)
     {
+        if (parent is Form dialog and not MainForm) DialogFrame.Apply(dialog);
         foreach (Control c in parent.Controls)
         {
             if (c is TextBox or NumericUpDown or ComboBox or ListBox) { c.BackColor = AppTheme.Field; c.ForeColor = Ink; }
@@ -174,7 +175,7 @@ public sealed partial class MainForm : Form
     {
         var name = Prompt("Layout name", blank ? "New WoW layout" : layout.Name + " copy");
         if (string.IsNullOrWhiteSpace(name)) return;
-        if (settings.Layouts.Any(l => l.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) { MessageBox.Show(this, "A layout with that name already exists. Choose a different name.", "Layout name"); return; }
+        if (settings.Layouts.Any(l => l.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) { ThemedMessageBox.Show(this, "A layout with that name already exists. Choose a different name.", "Layout name"); return; }
         var next = blank ? new Layout { Executable = layout.Executable } : JsonSerializer.Deserialize<Layout>(JsonSerializer.Serialize(layout))!;
         next.Name = name.Trim(); foreach (var slot in next.Slots) { slot.Id = Guid.NewGuid().ToString("N"); slot.BattleNet?.ClearBinding(); }
         if (next.Slots.Count == 0) next.Slots.Add(DefaultSlot(next, 0));
@@ -248,14 +249,14 @@ public sealed partial class MainForm : Form
                 }
         }
         catch (OperationCanceledException) { Log("Stopped. Opened clients remain running; no further logins will be attempted."); }
-        catch (Exception ex) { Log("Could not complete layout: " + ex.Message); MessageBox.Show(this, ex.Message, "Layout needs attention", MessageBoxButtons.OK, MessageBoxIcon.Information); }
+        catch (Exception ex) { Log("Could not complete layout: " + ex.Message); ThemedMessageBox.Show(this, ex.Message, "Layout needs attention", MessageBoxButtons.OK, MessageBoxIcon.Information); }
         finally { busy = false; SetWorkspaceEnabled(true); start.Visible = true; cancel.Visible = cancel.Enabled = false; mainMenu.Enabled = true; SetStatus(""); hover?.Suspend(false); launchCancellation.Dispose(); launchCancellation = null; RefreshClients(); }
     }
     private void ChooseHotkey()
     {
         using var dialog = new Form { Text = "Choose a global toggle shortcut", ClientSize = new(420, 150), StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false, BackColor = Surface, ForeColor = Ink, Font = Font, KeyPreview = true };
         var label = new Label { Text = "Press Ctrl / Alt / Shift plus a letter, number or function key.\nEscape cancels. The shortcut works while WoW is active.", AutoSize = false, Bounds = new(18, 20, 385, 65), ForeColor = Ink };
-        dialog.Controls.Add(label);
+        dialog.Controls.Add(label); DialogFrame.Apply(dialog);
         dialog.KeyDown += (_, e) =>
         {
             e.SuppressKeyPress = true; if (e.KeyCode == Keys.Escape) { dialog.Close(); return; }

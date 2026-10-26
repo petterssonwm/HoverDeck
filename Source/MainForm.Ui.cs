@@ -88,6 +88,13 @@ public sealed partial class MainForm
         var logs = new Panel { Dock = DockStyle.Fill, Padding = new(12), BackColor = Surface, Margin = new(0, 12, 0, 0), Visible = false };
         logs.Controls.Add(logBox); content.Controls.Add(logs, 0, 2);
         activityLog.CheckedChanged += (_, _) => { logs.Visible = activityLog.Checked; content.RowStyles[2].Height = activityLog.Checked ? 137 : 0; };
+        hints.OwnerDraw = true;
+        hints.Draw += (_, e) =>
+        {
+            using (var back = new SolidBrush(AppTheme.Surface)) e.Graphics.FillRectangle(back, e.Bounds);
+            using (var edge = new Pen(AppTheme.ButtonBorder)) e.Graphics.DrawRectangle(edge, 0, 0, e.Bounds.Width - 1, e.Bounds.Height - 1);
+            TextRenderer.DrawText(e.Graphics, e.ToolTipText, e.Font, Rectangle.Inflate(e.Bounds, -4, -2), AppTheme.Ink, TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak);
+        };
         start.Text = "Start clients"; hints.SetToolTip(start, "Open missing clients and move every open client into place. Already assigned clients are reused.");
         hints.SetToolTip(apply, "Move the clients that are already open to their positions on the map. Nothing is launched or logged in.");
         Theme(this); slots.BackColor = AppTheme.Rail; logBox.BackColor = Surface; UpdateHotkeyLabel(); delay.Value = settings.DelayMs;
@@ -159,10 +166,10 @@ public sealed partial class MainForm
         var trayMinimize = new ToolStripMenuItem("Minimize to notification area") { Name = "MinimizeToTray", CheckOnClick = true, Checked = settings.MinimizeToTray, ToolTipText = "On: minimizing hides HoverDeck next to the clock. Off: it minimizes to the taskbar like a normal window." };
         trayMinimize.CheckedChanged += (_, _) => { settings.MinimizeToTray = trayMinimize.Checked; SaveSoon(); };
         sharedSettingsMenu.DropDownItems.Add(trayMinimize);
+        sharedSettingsMenu.DropDownItems.Add(activityLog);
         sharedSettingsMenu.DropDownItems.Add(new ToolStripSeparator());
         sharedSettingsMenu.DropDownItems.Add("Check for updates…", null, async (_, _) => await CheckForUpdates(true));
-        var viewMenu = new ToolStripMenuItem("VIEW  ▾"); viewMenu.DropDownItems.Add(activityLog);
-        mainMenu.Items.AddRange(new ToolStripItem[] { layoutMenu, sharedSettingsMenu, viewMenu });
+        mainMenu.Items.AddRange(new ToolStripItem[] { layoutMenu, sharedSettingsMenu });
         foreach (ToolStripMenuItem item in mainMenu.Items) { item.Font = new("Segoe UI", 9f, FontStyle.Bold); item.Padding = new(8, 0, 8, 0); item.Margin = new(0, 0, 12, 0); }
         mainMenu.Renderer = new WorkspaceMenuRenderer(); MainMenuStrip = mainMenu;
         // Hovered or open menus get the launcher's blue underline along the bar's bottom edge.
@@ -242,7 +249,7 @@ public sealed partial class MainForm
         var names = layout.Slots.Where(s => open.ContainsKey(s.Id)).Select(s => s.Name).ToList();
         if (names.Count == 0) { Log("No open clients to close."); return; }
         string action = restart ? "Restart" : "Close", list = string.Join(", ", names);
-        if (MessageBox.Show(this, $"{action} {names.Count} open client{(names.Count == 1 ? "" : "s")}?\n\n{list}\n\nEach game closes as if you clicked its window's X.", $"{action} clients", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        if (ThemedMessageBox.Show(this, $"{action} {names.Count} open client{(names.Count == 1 ? "" : "s")}?\n\n{list}\n\nEach game closes as if you clicked its window's X.", $"{action} clients", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         busy = true; launchCancellation = new(); hover?.Suspend(true); SetWorkspaceEnabled(false); start.Visible = apply.Visible = false; cancel.Visible = cancel.Enabled = true; mainMenu.Enabled = false;
         SetStatus(restart ? "Restarting · closing clients…" : "Closing clients…");
         List<Slot> stillOpen = new(); bool cancelled = false;
@@ -253,7 +260,7 @@ public sealed partial class MainForm
         {
             string left = string.Join(", ", stillOpen.Select(s => s.Name));
             Log($"Still running after 30 seconds: {left}.");
-            MessageBox.Show(this, $"{left} did not close within 30 seconds. The game may be waiting for you (for example a logout timer or a prompt). Close it yourself{(restart ? ", then press Start clients" : "")}.", $"{action} clients", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            ThemedMessageBox.Show(this, $"{left} did not close within 30 seconds. The game may be waiting for you (for example a logout timer or a prompt). Close it yourself{(restart ? ", then press Start clients" : "")}.", $"{action} clients", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         if (restart && !cancelled) await RunLayout(true);
@@ -287,7 +294,7 @@ public sealed partial class MainForm
         if (busy || displayApplying || arrangeDisplays.Checked) return;
         busy = true; mainMenu.Enabled = mainArea.Enabled = start.Enabled = false; hover?.Suspend(true);
         try { await action(); }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Settings"); }
+        catch (Exception ex) { ThemedMessageBox.Show(this, ex.Message, "Settings"); }
         finally { busy = false; mainMenu.Enabled = mainArea.Enabled = start.Enabled = true; hover?.Suspend(false); UpdateSlotDetails(); RefreshClients(); }
     }
     private void ShowHoverPreferences()
@@ -296,11 +303,11 @@ public sealed partial class MainForm
         using var dialog = new Form { Text = "Hover focus settings", ClientSize = new(520, 310), StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedDialog, MinimizeBox = false, MaximizeBox = false, BackColor = Surface, ForeColor = Ink, Font = Font };
         var body = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new(20), FlowDirection = FlowDirection.TopDown, WrapContents = false };
         body.Controls.Add(new Label { Text = "Focus follows the mouse over your configured WoW clients.\nUse the main toggle or your shortcut to turn it on and off.", Width = 475, Height = 55 });
-        var timing = new FlowLayoutPanel { Width = 475, Height = 40 }; timing.Controls.Add(Label("Delay (milliseconds)")); timing.Controls.Add(delay); body.Controls.Add(timing);
+        var timing = new FlowLayoutPanel { Width = 475, Height = 40 }; timing.Controls.Add(Label("Delay (milliseconds)")); var delayBox = new FieldBox(delay, 100); timing.Controls.Add(delayBox); body.Controls.Add(timing);
         var shortcut = new FlowLayoutPanel { Width = 475, Height = 40 }; shortcut.Controls.Add(Label("Toggle shortcut")); hotkey.Width = 210; shortcut.Controls.Add(hotkey); body.Controls.Add(shortcut);
         body.Controls.Add(new Label { Text = "Changes save immediately. Your previous Windows hover settings return when HoverDeck exits.", Width = 475, Height = 42, ForeColor = Muted, Font = new("Segoe UI", 9) });
         var done = Button("Done"); done.DialogResult = DialogResult.OK; body.Controls.Add(done); dialog.Controls.Add(body); Theme(dialog);
-        dialog.ShowDialog(this); timing.Controls.Remove(delay); shortcut.Controls.Remove(hotkey);
+        dialog.ShowDialog(this); delay.Parent?.Controls.Remove(delay); shortcut.Controls.Remove(hotkey); // delay and hotkey are reused by the next dialog
     }
     private void EditDirectDefaults()
     {
@@ -313,7 +320,7 @@ public sealed partial class MainForm
         browse.Click += (_, _) => { var chosen = PickExe(path.Text); if (chosen is not null) path.Text = chosen; };
         body.Controls.Add(Label("Launch arguments (all direct clients in this layout)")); var args = new TextBox { Text = layout.Arguments, Width = 590 }; body.Controls.Add(args);
         var actions = new FlowLayoutPanel { Width = 595, Height = 42, Margin = new(0, 15, 0, 0) }; var save = Button("Save"); var cancelEdit = Button("Cancel"); cancelEdit.DialogResult = DialogResult.Cancel; actions.Controls.AddRange(new Control[] { save, cancelEdit }); body.Controls.Add(actions);
-        save.Click += (_, _) => { if (path.Text.Trim().Length > 0 && !File.Exists(path.Text.Trim().Trim('"'))) { MessageBox.Show(dialog, "Choose an existing game executable."); return; } dialog.DialogResult = DialogResult.OK; };
+        save.Click += (_, _) => { if (path.Text.Trim().Length > 0 && !File.Exists(path.Text.Trim().Trim('"'))) { ThemedMessageBox.Show(dialog, "Choose an existing game executable."); return; } dialog.DialogResult = DialogResult.OK; };
         dialog.Controls.Add(body); dialog.AcceptButton = save; dialog.CancelButton = cancelEdit; Theme(dialog);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         layout.Executable = path.Text.Trim().Trim('"'); layout.Arguments = args.Text; launcher.Bindings.Clear(); SaveNow(); RefreshClients(); UpdateSlotDetails();

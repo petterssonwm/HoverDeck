@@ -23,19 +23,43 @@ internal static class AppTheme
     public static void Apply(Form form)
     {
         form.BackColor = Surface; form.ForeColor = Ink; form.Icon = AppIcon;
-        Style(form);
+        Style(form); DialogFrame.Apply(form);
     }
     public static void Style(Control parent)
     {
         foreach (Control control in parent.Controls)
         {
             if (control is TextBox or ComboBox or ListBox or NumericUpDown) { control.BackColor = Field; control.ForeColor = Ink; }
+            if (control is TextBox { BorderStyle: BorderStyle.Fixed3D } text) text.BorderStyle = BorderStyle.FixedSingle;
+            if (control is ListBox { BorderStyle: BorderStyle.Fixed3D } list) list.BorderStyle = BorderStyle.FixedSingle;
             if (control is Button button) { button.FlatStyle = FlatStyle.Flat; button.BackColor = ButtonFace; button.ForeColor = Ink; button.FlatAppearance.BorderColor = ButtonBorder; button.FlatAppearance.MouseOverBackColor = ButtonHover; }
             Style(control);
         }
     }
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Button, object> primaries = new();
+    // Finishing pass for every framed dialog: dark button and field borders, light text. Buttons
+    // that were styled on purpose (blue primary actions, coloured text such as Delete) keep their look.
+    public static void Polish(Control parent)
+    {
+        foreach (Control control in parent.Controls)
+        {
+            switch (control)
+            {
+                case Button button when !primaries.TryGetValue(button, out _):
+                    button.FlatStyle = FlatStyle.Flat;
+                    if (button.UseVisualStyleBackColor || button.BackColor == SystemColors.Control) { button.UseVisualStyleBackColor = false; button.BackColor = ButtonFace; }
+                    if (button.ForeColor == SystemColors.ControlText || button.ForeColor == Color.White) button.ForeColor = Ink;
+                    button.FlatAppearance.BorderColor = ButtonBorder; button.FlatAppearance.MouseOverBackColor = ButtonHover;
+                    break;
+                case TextBox text: text.BackColor = Field; text.ForeColor = Ink; if (text.BorderStyle == BorderStyle.Fixed3D) text.BorderStyle = BorderStyle.FixedSingle; break;
+                case ListBox list: list.BackColor = Field; list.ForeColor = Ink; if (list.BorderStyle == BorderStyle.Fixed3D) list.BorderStyle = BorderStyle.FixedSingle; break;
+            }
+            Polish(control);
+        }
+    }
     public static void Primary(Button button)
     {
+        primaries.AddOrUpdate(button, new object());
         button.FlatStyle = FlatStyle.Flat; button.BackColor = Blue; button.ForeColor = Color.White;
         button.FlatAppearance.BorderColor = Blue; button.FlatAppearance.MouseOverBackColor = Color.FromArgb(42, 155, 255);
         // Flat buttons only grey out their text, so a disabled primary action also loses its blue.

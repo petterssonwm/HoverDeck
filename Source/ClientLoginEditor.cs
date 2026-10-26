@@ -32,7 +32,7 @@ internal static class ClientLoginEditor
             catch (Exception ex)
             {
                 if (owner.IsDisposed || owner.Disposing) return null;
-                MessageBox.Show(owner, ex.Message, "Login screen setup", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ThemedMessageBox.Show(owner, ex.Message, "Login screen setup", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
         return null;

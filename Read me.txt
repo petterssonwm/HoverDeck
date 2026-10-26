@@ -1,4 +1,4 @@
-HOVERDECK 1.7.3 — WoW workspace
+HOVERDECK 1.7.4 — WoW workspace
 
 Open HoverDeck.exe. Requires Windows x64, .NET 8 Windows Desktop Runtime and Microsoft Edge WebView2 Runtime.
 Downloads: https://dotnet.microsoft.com/download/dotnet/8.0 and https://developer.microsoft.com/microsoft-edge/webview2/ (Evergreen Runtime).
@@ -19,7 +19,7 @@ Main workspace: the left sidebar holds the saved layout, the number of clients (
 The top bar works as the window's title bar: drag it to move HoverDeck, double-click it to maximize, and use the minimize / maximize / close buttons at its right end. The window edges resize and Windows snap works as usual. Minimizing hides HoverDeck to the notification area by default; turn off Settings > Minimize to notification area to minimize it to the taskbar like a normal window instead.
 
 Layout menu: New, Save a copy, Capture open clients, Direct-launch defaults and Exit.
-Settings menu: WoW folders, Battle.net connections, Hover focus, Minimize to notification area and Check for updates. These are shared across all layouts and clients.
+Settings menu: WoW folders, Battle.net connections, Hover focus, Minimize to notification area, Activity log and Check for updates. These are shared across all layouts and clients.
 View menu: show or hide the Activity log. It is collapsed initially to leave more room for the map.
 Clients / Arrange displays / Identify (above the map): switch between editing client positions and arranging the Windows displays, or show each display's number on its screen. The display map refreshes from Windows automatically.
 

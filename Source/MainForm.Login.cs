@@ -7,8 +7,8 @@ public sealed partial class MainForm
     private void DeleteClient(Slot slot)
     {
         if (busy || displayApplying || arrangeDisplays.Checked || !layout.Slots.Contains(slot)) return;
-        if (layout.Slots.Count <= 1) { MessageBox.Show(this, "A layout needs at least one client, so the last client can't be deleted.", "Delete client"); return; }
-        if (MessageBox.Show(this, $"Delete {slot.Name}?\n\nIts position, launch settings and saved login are removed from this layout. A game that is running is not closed.", "Delete client", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+        if (layout.Slots.Count <= 1) { ThemedMessageBox.Show(this, "A layout needs at least one client, so the last client can't be deleted.", "Delete client"); return; }
+        if (ThemedMessageBox.Show(this, $"Delete {slot.Name}?\n\nIts position, launch settings and saved login are removed from this layout. A game that is running is not closed.", "Delete client", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
         RemoveClient(slot);
     }
     internal void RemoveClient(Slot slot)
@@ -51,7 +51,7 @@ public sealed partial class MainForm
             await ClientLoginService.Run(slot, window, false, Log, launchCancellation.Token);
         }
         catch (OperationCanceledException) { Log("Login stopped. No further credentials will be entered."); }
-        catch (Exception ex) { Log("Login skipped: " + ex.Message); MessageBox.Show(this, ex.Message, "Client login"); }
+        catch (Exception ex) { Log("Login skipped: " + ex.Message); ThemedMessageBox.Show(this, ex.Message, "Client login"); }
         finally
         {
             busy = false; mainMenu.Enabled = true; SetWorkspaceEnabled(true); start.Enabled = start.Visible = true; cancel.Visible = cancel.Enabled = false; SetStatus("");

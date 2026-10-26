@@ -20,7 +20,7 @@ internal sealed class ClientLoginForm : Form
         this.window = window; executable = slot.PathFor(layout); screen = draft?.Screen;
         Text = slot.Name + " — Login"; ClientSize = new(610, 600); MinimumSize = Size; FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent; MaximizeBox = MinimizeBox = false;
-        Font = new("Segoe UI", 10); BackColor = AppTheme.Surface; ForeColor = AppTheme.Ink;
+        Font = new("Segoe UI", 10); BackColor = AppTheme.Surface; ForeColor = AppTheme.Ink; DialogFrame.Apply(this);
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new(20), ColumnCount = 1, RowCount = 11 };
         foreach (int height in new[] { 43, 24, 34, 24, 36, 32, 35, 47, 41, 90, 40 }) root.RowStyles.Add(new(SizeType.Absolute, height));
         Controls.Add(root);
@@ -28,7 +28,7 @@ internal sealed class ClientLoginForm : Form
         root.Controls.Add(new Label { Text = "Account / email", AutoSize = true }, 0, 1); account.AccessibleName = "Client login account"; root.Controls.Add(account, 0, 2);
         root.Controls.Add(new Label { Text = "Password", AutoSize = true }, 0, 3); password.AccessibleName = "Client login password"; root.Controls.Add(password, 0, 4);
         root.Controls.Add(onLaunch, 0, 5);
-        var waitRow = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false }; waitRow.Controls.Add(new Label { Text = "Wait after launch (seconds)", AutoSize = true, Margin = new(0, 4, 10, 0) }); waitRow.Controls.Add(delay); root.Controls.Add(waitRow, 0, 6);
+        var waitRow = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false }; waitRow.Controls.Add(new Label { Text = "Wait after launch (seconds)", AutoSize = true, Margin = new(0, 4, 10, 0) }); waitRow.Controls.Add(new FieldBox(delay, 90)); root.Controls.Add(waitRow, 0, 6);
         root.Controls.Add(screenStatus, 0, 7);
         var choose = MakeButton("Set up login screen…", 185); choose.Name = "SetupLogin"; choose.Enabled = window is not null; root.Controls.Add(choose, 0, 8);
         root.Controls.Add(new Label { Text = "One-time setup: click the account field and a fixed login label/logo in a preview. Tab then selects Password; Enter submits. Custom field positions are optional. Set up again if the client size changes.\n\nCredentials are encrypted for this Windows account. Escape or switching away stops login input.", Dock = DockStyle.Fill, Font = new("Segoe UI", 9) }, 0, 9);
@@ -58,22 +58,22 @@ internal sealed class ClientLoginForm : Form
                 // form also ends ShowDialog, leaving async click handlers disposed.
                 Result = CreateDraft(); DialogResult = DialogResult.Retry; Close();
             }
-            catch (Exception ex) { MessageBox.Show(this, ex.Message, "Login screen setup"); }
+            catch (Exception ex) { ThemedMessageBox.Show(this, ex.Message, "Login screen setup"); }
         };
         foreach (var text in new[] { account, password }) { text.BackColor = AppTheme.Field; text.ForeColor = ForeColor; }
     }
     private static Button MakeButton(string text, int width) => new() { Text = text, Width = width, Height = 32, FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonFace, ForeColor = Color.White, Margin = new(0, 0, 8, 0) };
     private void Save(bool loginNow)
     {
-        if (string.IsNullOrWhiteSpace(account.Text) || password.Text.Length == 0) { MessageBox.Show(this, "Enter the account and password for this client.", "Login details"); return; }
-        if (account.Text.Any(char.IsControl) || password.Text.Any(char.IsControl)) { MessageBox.Show(this, "Login details cannot contain line breaks or control characters.", "Login details"); return; }
-        if (loginNow && screen is not { IsValid: true }) { MessageBox.Show(this, "Set up the login screen first.", "Login details"); return; }
+        if (string.IsNullOrWhiteSpace(account.Text) || password.Text.Length == 0) { ThemedMessageBox.Show(this, "Enter the account and password for this client.", "Login details"); return; }
+        if (account.Text.Any(char.IsControl) || password.Text.Any(char.IsControl)) { ThemedMessageBox.Show(this, "Login details cannot contain line breaks or control characters.", "Login details"); return; }
+        if (loginNow && screen is not { IsValid: true }) { ThemedMessageBox.Show(this, "Set up the login screen first.", "Login details"); return; }
         try
         {
             Result = CreateDraft();
             LoginNow = loginNow; DialogResult = DialogResult.OK; Close();
         }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Could not save login"); }
+        catch (Exception ex) { ThemedMessageBox.Show(this, ex.Message, "Could not save login"); }
     }
     private ClientLogin CreateDraft() => new() { Executable = executable, ProtectedCredentials = CredentialProtection.Protect(new(account.Text.Trim(), password.Text)), Screen = screen, OnLaunch = onLaunch.Checked, DelaySeconds = (int)delay.Value };
     protected override void Dispose(bool disposing) { if (disposing) { account.Clear(); password.Clear(); } base.Dispose(disposing); }
@@ -91,7 +91,7 @@ internal sealed class LoginFieldPicker : Form
     {
         this.capture = capture;
         Text = "Set up login screen — click the preview"; Size = new(1100, 760); MinimumSize = new(850, 520); StartPosition = FormStartPosition.CenterParent;
-        BackColor = AppTheme.Background; ForeColor = Color.White; Font = new("Segoe UI", 11);
+        BackColor = AppTheme.Background; ForeColor = Color.White; Font = new("Segoe UI", 11); DialogFrame.Apply(this);
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new(14), ColumnCount = 1, RowCount = 3 };
         root.RowStyles.Add(new(SizeType.Absolute, 60)); root.RowStyles.Add(new(SizeType.Percent, 100)); root.RowStyles.Add(new(SizeType.Absolute, 40)); Controls.Add(root);
         root.Controls.Add(instructions, 0, 0); picture = new() { Name = "LoginPreview", Image = capture, SizeMode = PictureBoxSizeMode.Zoom, Dock = DockStyle.Fill, Cursor = Cursors.Cross, BackColor = Color.Black }; root.Controls.Add(picture, 0, 1);

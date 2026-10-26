@@ -7,7 +7,7 @@ internal sealed class BattleNetConnectionsForm : Form
         Func<string, string, bool>? confirmRemoval = null, Func<BattleNetConnection, Task>? forgetSession = null)
     {
         var connections = settings.BattleNetConnections;
-        confirmRemoval ??= (message, title) => MessageBox.Show(this, message, title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK;
+        confirmRemoval ??= (message, title) => ThemedMessageBox.Show(this, message, title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK;
         forgetSession ??= connection => BattleNetWebForm.ForgetSession(this, connection);
         Text = "Battle.net connections"; ClientSize = new(860, 570); StartPosition = FormStartPosition.CenterParent; Font = new("Segoe UI", 10);
         FormBorderStyle = FormBorderStyle.FixedDialog; MinimizeBox = MaximizeBox = false;
