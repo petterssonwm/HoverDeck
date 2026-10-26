@@ -58,6 +58,19 @@ internal sealed class IntegrationTests : Form
             for (int i = 0; i < 10 && WindowStacking.Apply(stackOrder, stackLayers); i++) await Task.Delay(150); // asynchronous across processes
             var front = stackOrder.FrontToBack(new[] { lower.Handle, upper.Handle });
             Check("Layers keep a higher-layer client in front of a lower-layer client in another process", front.Count == 2 && front[0] == upper.Handle);
+            // The live path used by the app: layers handed to the hover service are enforced on their own.
+            using (var layered = new HoverService(50))
+            {
+                Native.SetWindowPos(lower.Handle, 0, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010); await Task.Delay(300); // layer-1 client in front
+                layered.UpdateCoverage(new[] { lower, upper }, Array.Empty<GameWindow>(), new Dictionary<nint, int> { [lower.Handle] = 1, [upper.Handle] = 2 });
+                await Task.Delay(800);
+                front = stackOrder.FrontToBack(new[] { lower.Handle, upper.Handle });
+                Check("The running service restacks open clients by layer without an Apply step", front[0] == upper.Handle);
+                layered.UpdateCoverage(new[] { lower, upper }, Array.Empty<GameWindow>(), new Dictionary<nint, int> { [lower.Handle] = 3, [upper.Handle] = 2 }); // layers changed while open
+                await Task.Delay(800);
+                front = stackOrder.FrontToBack(new[] { lower.Handle, upper.Handle });
+                Check("Changing layers of open clients takes effect immediately", front[0] == lower.Handle);
+            }
             var before = new[] { Native.Setting(0x1000), Native.Setting(0x100C), Native.Setting(0x2002) };
             using (var service = new HoverService(50))
             {

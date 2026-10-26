@@ -100,27 +100,37 @@ public sealed class LayoutCanvas : Control
         foreach (var i in indices)
         {
             if (Layout is null || i < 0 || i >= Layout.Slots.Count) continue;
-            var s = Layout.Slots[i]; var r = Map(s.Bounds); var color = SlotColors[i % SlotColors.Length];
+            var r = Map(Layout.Slots[i].Bounds); var color = SlotColors[i % SlotColors.Length];
             using var edge = new Pen(color, i == Selected ? 2.5f : 1.2f);
             g.DrawRectangle(edge, r.X, r.Y, r.Width, r.Height);
-            var clip = g.Save(); g.SetClip(r, CombineMode.Intersect);
-            float labelY = r.Y;
-            if (i != Selected && Selected >= 0 && Selected < Layout.Slots.Count)
-            {
-                var selectedRect = Map(Layout.Slots[Selected].Bounds);
-                if (new RectangleF(r.X, r.Y, r.Width, 32).IntersectsWith(new RectangleF(selectedRect.X, selectedRect.Y, selectedRect.Width, 32))) labelY += 36;
-            }
-            using var band = new SolidBrush(Color.FromArgb(15, 19, 26));
+            if (i == Selected) { using var handle = new SolidBrush(color); g.FillRectangle(handle, r.Right - 9, r.Bottom - 9, 9, 9); }
+        }
+        // Name tags are drawn after every rectangle, so a client hidden behind another one
+        // still shows its tag, and the tag works as a handle to select and drag that client.
+        labelHandles.Clear();
+        var placed = new List<RectangleF>();
+        foreach (var i in indices)
+        {
+            if (Layout is null || i < 0 || i >= Layout.Slots.Count) continue;
+            var s = Layout.Slots[i]; var r = Map(s.Bounds); var color = SlotColors[i % SlotColors.Length];
             var label = $"{i + 1:00}  {s.Name}"; float labelWidth = g.MeasureString(label, regular).Width;
             // The layer tag is shown only when layers are in use and it fits inside the client.
             string tag = $"LAYER {s.Layer}"; float tagWidth = g.MeasureString(tag, small).Width + 10;
             bool showTag = layered && labelWidth + tagWidth + 26 <= r.Width;
-            g.FillRectangle(band, r.X + 1, labelY + 1, Math.Min(r.Width - 2, labelWidth + 22 + (showTag ? tagWidth : 0)), 30);
-            if (showTag) { using var tagText = new SolidBrush(Color.FromArgb(139, 147, 163)); g.DrawString(tag, small, tagText, r.X + 9 + labelWidth + 6, labelY + 9); }
+            var band = new RectangleF(r.X + 1, r.Y + 1, Math.Min(r.Width - 2, labelWidth + 22 + (showTag ? tagWidth : 0)), 30);
+            // Step down past tags already placed in the same spot (for clients sharing a corner).
+            for (int step = 0; step < 6 && placed.Any(p => p.IntersectsWith(band)) && band.Bottom + 36 <= r.Bottom; step++) band.Y += 36;
+            placed.Add(band);
+            var visible = RectangleF.Intersect(band, r);
+            if (visible.Width < 4 || visible.Height < 4) continue;
+            labelHandles.Add((i, visible));
+            var clip = g.Save(); g.SetClip(r, CombineMode.Intersect);
+            using (var back = new SolidBrush(Color.FromArgb(15, 19, 26))) g.FillRectangle(back, band);
+            if (i == Selected) { using var mark = new SolidBrush(color); g.FillRectangle(mark, band.X, band.Bottom - 2, band.Width, 2); }
+            if (showTag) { using var tagText = new SolidBrush(Color.FromArgb(139, 147, 163)); g.DrawString(tag, small, tagText, r.X + 9 + labelWidth + 6, band.Y + 8); }
             using var text = new SolidBrush(color);
-            g.DrawString(label, regular, text, r.X + 9, labelY + 7);
+            g.DrawString(label, regular, text, r.X + 9, band.Y + 6);
             g.Restore(clip);
-            if (i == Selected) { using var handle = new SolidBrush(color); g.FillRectangle(handle, r.Right - 9, r.Bottom - 9, 9, 9); }
         }
         foreach (var i in indices)
         {
@@ -134,6 +144,8 @@ public sealed class LayoutCanvas : Control
         using (var frame = new Pen(AppTheme.Line)) g.DrawRectangle(frame, 0, 0, Width - 1, Height - 1);
         g.DrawString(DisplayEditMode ? "Zoom stays fixed · Fit view to show all displays · Ctrl disables snapping" : "Drag to move  ·  Bottom-right corner to resize  ·  Ctrl disables snapping", small, muted, 20, Height - 25);
     }
+    private readonly List<(int Index, RectangleF Bounds)> labelHandles = new();
+    private int LabelAt(Point p) { for (int k = labelHandles.Count - 1; k >= 0; k--) if (labelHandles[k].Bounds.Contains(p)) return labelHandles[k].Index; return -1; }
     private IEnumerable<int> DrawOrder() => Layout is null ? Enumerable.Empty<int>() :
         Enumerable.Range(0, Layout.Slots.Count).OrderBy(i => Layout.Slots[i].Layer).ThenBy(i => i == Selected).ThenBy(i => i);
     public static string DisplayNumber(MonitorInfo monitor, int fallback)
@@ -157,6 +169,14 @@ public sealed class LayoutCanvas : Control
             return;
         }
         if (e.Button != MouseButtons.Left || Layout is null) return;
+        // A name tag always wins: it is the way to reach a client hidden behind another one.
+        int tagged = LabelAt(e.Location);
+        if (tagged >= 0 && tagged < Layout.Slots.Count)
+        {
+            Selected = tagged; initial = Layout.Slots[tagged].Bounds; dragStart = e.Location;
+            resizing = false; dragging = true; Capture = true;
+            SelectionChanged?.Invoke(); Invalidate(); return;
+        }
         var order = DrawOrder().Reverse(); // front-most first, matching what is drawn on top
         foreach (var i in order)
         {
@@ -186,7 +206,7 @@ public sealed class LayoutCanvas : Control
         if (!dragging)
         {
             var r = Map(s.Bounds);
-            Cursor = r.Contains(e.Location) && e.X > r.Right - 16 && e.Y > r.Bottom - 16 ? Cursors.SizeNWSE : r.Contains(e.Location) ? Cursors.SizeAll : Cursors.Default;
+            Cursor = LabelAt(e.Location) >= 0 ? Cursors.Hand : r.Contains(e.Location) && e.X > r.Right - 16 && e.Y > r.Bottom - 16 ? Cursors.SizeNWSE : r.Contains(e.Location) ? Cursors.SizeAll : Cursors.Default;
             return;
         }
         int dx = (int)Math.Round((e.X - dragStart.X) / scale), dy = (int)Math.Round((e.Y - dragStart.Y) / scale);

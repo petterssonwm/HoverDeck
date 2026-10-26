@@ -51,6 +51,18 @@ internal sealed class LibraryUiTests : Form
                     using var bitmap = new Bitmap(layeredForm.Width, layeredForm.Height); layeredForm.DrawToBitmap(bitmap, new Rectangle(Point.Empty, layeredForm.Size)); bitmap.Save(Path.Combine(output, "workspace-layers.png"));
                     layerField.Value = 3;
                     if (bigSlot.Layer != 3) throw new Exception("Changing the Layer field did not update the client.");
+                    // Same layer, big client selected and drawn over the small one: the small client's name tag must still select it.
+                    layerField.Value = 1; smallSlot.Layer = 1;
+                    var map = Descendants(layeredForm).OfType<LayoutCanvas>().First(); map.Refresh();
+                    var handles = (System.Collections.IList)typeof(LayoutCanvas).GetField("labelHandles", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(map)!;
+                    var smallTag = handles.Cast<(int Index, RectangleF Bounds)>().Single(h => h.Index == 1).Bounds;
+                    var click = new MouseEventArgs(MouseButtons.Left, 1, (int)(smallTag.X + smallTag.Width / 2), (int)(smallTag.Y + smallTag.Height / 2), 0);
+                    typeof(LayoutCanvas).GetMethod("OnMouseDown", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(map, new object[] { click });
+                    typeof(LayoutCanvas).GetMethod("OnMouseUp", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(map, new object[] { click });
+                    if (map.Selected != 1) throw new Exception("Clicking the name tag of a client hidden behind another did not select it.");
+                    lines.Add("PASS: a client hidden behind a bigger one is selected through its name tag");
+                    map.Selected = 0; map.Refresh();
+                    using (var hidden = new Bitmap(layeredForm.Width, layeredForm.Height)) { layeredForm.DrawToBitmap(hidden, new Rectangle(Point.Empty, layeredForm.Size)); hidden.Save(Path.Combine(output, "workspace-hidden-tag.png")); }
                     layeredForm.Close();
                 }
                 lines.Add("PASS: the Layer field shows and edits the selected client's layer; layered layout rendered");
