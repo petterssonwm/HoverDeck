@@ -27,6 +27,35 @@ internal static class Program
         if (args.Length >= 3 && args[0] == "--scan-wow") { File.WriteAllText(args[2], JsonSerializer.Serialize(WoWInstallationScanner.Scan(new[] { args[1] }), Storage.Json)); return; }
         if (args.Length >= 2 && args[0] == "--library-ui-check") { Application.Run(new LibraryUiTests(args[1])); return; }
         if (args.Length >= 3 && args[0] == "--bnet-test") { Application.Run(new BattleNetIntegrationTests(args[1], args[2])); return; }
+        if (args.Length >= 2 && args[0] == "--bnet-check")
+        {
+            // Read-only check against the real launcher: reads the version and account lists, never presses Play.
+            var lines = new List<string>(); var foreground = Native.GetForegroundWindow();
+            try
+            {
+                var choices = BattleNetUi.Run(ui => ui.ReadChoices(), CancellationToken.None, lines.Add).GetAwaiter().GetResult();
+                Thread.Sleep(5500); // Battle.net is put away once HoverDeck has left it idle
+                var launcher = Native.Windows(Process.GetProcessesByName("Battle.net").Select(p => Native.ProcessPath((uint)p.Id))).FirstOrDefault(w => w.Title == "Battle.net");
+                lines.Add($"PASS: read {choices.Versions.Count} versions and {choices.Accounts.Count} accounts");
+                lines.Add((launcher is not null && Native.IsIconic(launcher.Handle) ? "PASS" : "FAIL") + ": Battle.net is minimized");
+                lines.Add((Native.GetForegroundWindow() != launcher?.Handle ? "PASS" : "FAIL") + ": Battle.net did not take focus" + (Native.GetForegroundWindow() == foreground ? " (focus unchanged)" : ""));
+            }
+            catch (Exception ex) { lines.Add("FAIL: " + ex.Message); }
+            if (args.Contains("--timing"))
+            {
+                // Times the account/version selection for each Battle.net client of the active layout. Never presses Play.
+                int searches = 0; BattleNetUi.Diagnostic = m => { if (m.StartsWith("Accessibility level 0:")) searches++; };
+                var settings = Storage.Load(); var layout = settings.Layouts.FirstOrDefault(l => l.Name == settings.ActiveLayout);
+                foreach (var slot in layout?.Slots.Where(s => s.BattleNet is { IsConfigured: true }) ?? Enumerable.Empty<Slot>())
+                {
+                    var watch = Stopwatch.StartNew(); searches = 0;
+                    try { var account = BattleNetUi.Run(ui => ui.Prepare(slot.BattleNet!), CancellationToken.None).GetAwaiter().GetResult(); lines.Add($"{slot.Name}: selected {account} in {watch.ElapsedMilliseconds} ms with {searches} searches"); }
+                    catch (Exception ex) { lines.Add($"{slot.Name}: FAIL after {watch.ElapsedMilliseconds} ms: {ex.Message}"); }
+                }
+                BattleNetUi.PutAwayNow();
+            }
+            File.WriteAllLines(args[1], lines); return;
+        }
         if (args.Contains("--launch-settings-preview"))
         {
             BattleNetUi.Diagnostic = message => File.AppendAllText(Path.Combine(AppContext.BaseDirectory, "ui-diagnostic.txt"), DateTime.UtcNow.ToString("O") + " " + message + Environment.NewLine);
@@ -60,7 +89,7 @@ internal static class Program
         if (args.Length >= 3 && args[0] == "--integration-test") { Application.Run(new IntegrationTests(args[1], args[2])); return; }
         using var mutex = new Mutex(true, "Local\\HoverDeck.Application", out bool first);
         if (!first) { ThemedMessageBox.Show("HoverDeck is already running. Open it from the notification area.", "HoverDeck"); return; }
-        try { if (!args.Contains("--preview")) DisplayChangeSession.RecoverOnStartup(); Application.Run(new MainForm(args.Contains("--preview"))); }
+        try { if (!args.Contains("--preview")) DisplayChangeSession.RecoverOnStartup(); Application.Run(new MainForm(args.Contains("--preview"))); BattleNetUi.PutAwayNow(); }
         catch (Exception ex)
         {
             try { Directory.CreateDirectory(Storage.DirectoryPath); File.AppendAllText(Path.Combine(Storage.DirectoryPath, "error.log"), DateTimeOffset.Now + " " + ex + Environment.NewLine); } catch { }

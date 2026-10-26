@@ -84,6 +84,16 @@ internal sealed class BattleNetIntegrationTests : Form
             Check("Connected accounts launch directly with no confirmation callback", gateway.Plays == 7 && gateway.RequestedAccounts.TakeLast(2).SequenceEqual(new[] { "WoW1 (EU)", "WoW2 (US)" }) && layout.Slots.Take(2).Select(s => s.BattleNet!.BoundIdentity).Distinct().Count() == 2);
             await launcher.Run(layout, monitors, true, lines.Add, CancellationToken.None);
             Check("Reusing connected clients sends no additional Play", gateway.Plays == 7);
+            foreach (var process in gateway.Processes) { try { if (!process.HasExited) { process.CloseMainWindow(); process.WaitForExit(5000); } } catch { } }
+            // A starting game is logged in with the account Battle.net has selected, so the next
+            // account must not be chosen while the previous game is still loading.
+            var slow = new FakeGateway(executable, gateway.Processes) { Arguments = "--window-delay 3000" };
+            var ordered = new Layout { Slots = new() { NewSlot(1), NewSlot(2) } }; var sequential = new Launcher(slow);
+            int windowsAtSecondPrepare = -1; slow.BeforePrepare = () => { if (slow.Plays == 1) windowsAtSecondPrepare = sequential.Scan(ordered).Count; };
+            await sequential.Run(ordered, monitors, true, lines.Add, CancellationToken.None);
+            Check("The next account is selected only after the previous game window has opened", slow.Plays == 2 && windowsAtSecondPrepare == 1);
+            Check("Both slow-loading clients are placed at their positions", sequential.Assign(ordered, sequential.Scan(ordered)).Count == 2
+                && sequential.Assign(ordered, sequential.Scan(ordered)).All(p => p.Value.Bounds == ordered.Slots.Single(s => s.Id == p.Key).Bounds));
             lines.Add("Battle.net launch coordination checks passed using local fixtures only.");
         }
         catch (Exception ex) { lines.Add(ex.ToString()); Environment.ExitCode = 1; }
@@ -93,16 +103,17 @@ internal sealed class BattleNetIntegrationTests : Form
             File.WriteAllLines(report, lines); Close();
         }
     }
-    private sealed class FakeGateway(string executable) : IBattleNetGateway
+    private sealed class FakeGateway(string executable, List<Process>? processes = null) : IBattleNetGateway
     {
         public int Plays;
-        public Action? AfterPlay;
-        public readonly List<Process> Processes = new();
+        public Action? AfterPlay, BeforePrepare;
+        public string Arguments = "";
+        public readonly List<Process> Processes = processes ?? new();
         public readonly List<string> RequestedAccounts = new();
-        public Process StartFixture() { var process = Process.Start(new ProcessStartInfo(executable) { UseShellExecute = false })!; Processes.Add(process); return process; }
-        public Task<string> Prepare(BattleNetLaunch profile, CancellationToken token)
+        public Process StartFixture() { var process = Process.Start(new ProcessStartInfo(executable, Arguments) { UseShellExecute = false })!; Processes.Add(process); return process; }
+        public Task<string> Prepare(BattleNetLaunch profile, Action<string> log, CancellationToken token)
         {
-            token.ThrowIfCancellationRequested();
+            token.ThrowIfCancellationRequested(); BeforePrepare?.Invoke();
             if (profile.GameVersion != "World of Warcraft Classic") throw new InvalidOperationException("The selected version was not found in the fixture launcher.");
             return Task.FromResult(BattleNetAccounts.Resolve(profile, new[] { "WoW1 (EU)", "WoW2 (US)", "WoW3 (KR)", "WoW4 (EU)" }));
         }

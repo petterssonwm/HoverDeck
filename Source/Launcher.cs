@@ -51,6 +51,8 @@ public sealed class Launcher
                 if (!launchMissing) { log($"{slot.Name}: no matching open client."); continue; }
                 if (slot.LaunchMethod == ClientLaunchMethod.BattleNet)
                 {
+                    // Battle.net logs a starting game in with the account selected at that moment, so the
+                    // next client's account is chosen only after this window has opened and settled.
                     bool fresh = string.IsNullOrEmpty(slot.BattleNet!.PendingSinceUtc);
                     window = await OpenBattleNet(slot, layout, log, token, saveBindings);
                     if (fresh) launched++;
@@ -131,7 +133,7 @@ public sealed class Launcher
             using var loading = FindLoadingProcess(path, windows.Select(w => w.Identity).ToHashSet());
             if (loading is not null) throw new InvalidOperationException("A WoW client is already starting outside HoverDeck. Wait for it to open, close it, then use Start clients.");
             log($"{slot.Name}: selecting {profile.AccountLabel} · {profile.GameVersion} in Battle.net…");
-            string resolved = await battleNet.Prepare(profile, token);
+            string resolved = await battleNet.Prepare(profile, log, token);
             if (layout.Slots.Any(s => s.Id != slot.Id && s.LaunchMethod == ClientLaunchMethod.BattleNet && s.BattleNet is { } other
                 && other.ConnectionId == profile.ConnectionId && other.GameVersion == profile.GameVersion && other.ResolvedAccount == resolved && (other.BoundIdentity.Length > 0 || other.PendingSinceUtc.Length > 0)))
                 throw new InvalidOperationException($"{resolved} is already assigned to another slot for this game version.");

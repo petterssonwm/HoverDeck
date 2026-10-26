@@ -1,4 +1,4 @@
-HOVERDECK 1.7.4 — WoW workspace
+HOVERDECK 1.7.5 — WoW workspace
 
 Open HoverDeck.exe. Requires Windows x64, .NET 8 Windows Desktop Runtime and Microsoft Edge WebView2 Runtime.
 Downloads: https://dotnet.microsoft.com/download/dotnet/8.0 and https://developer.microsoft.com/microsoft-edge/webview2/ (Evergreen Runtime).
@@ -53,7 +53,7 @@ Local folders identify installed versions, not ownership. The saved web session 
 
 The installed-version dropdown resolves executable paths automatically. If there are several copies of the same version, their root paths distinguish them. Battle.net starts the installation registered in its own launcher: use its locate/install options to register the copy you intend to run. HoverDeck matches the selected executable path and does not silently assign a window from another folder.
 
-Keep the desktop Battle.net launcher open, signed in and in English. Its version/account availability is checked before Play. Holding Escape or switching away stops further launcher input. Complete authentication, updates, game prompts, two-factor checks and character selection yourself.
+Battle.net works in the background. Start clients opens the desktop Battle.net launcher if it is closed or in the notification area, waits until it shows your games, then minimizes it and selects the version, account and Play without taking focus, so you can keep using other windows. A launcher that is already open is minimized first. If Battle.net is not signed in, HoverDeck shows it and asks you to sign in; press Start clients again afterwards. Battle.net logs a starting game in with the account selected at that moment, so each client's account is selected only after the previous client's window has opened. The launcher must be in English. Its version/account availability is checked before Play. Cancel stops further launcher input. Complete authentication, updates, game prompts, two-factor checks and character selection yourself.
 
 After a launch, HoverDeck saves the process identity and places the new window. Start clients reuses the tracked processes across restarts. It does not inspect the account inside an already-running game. If a client was opened outside HoverDeck and is not tracked, close it and use Start clients to launch the selected account. Manual window assignment is not supported.
 
