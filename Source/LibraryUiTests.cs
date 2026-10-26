@@ -61,6 +61,14 @@ internal sealed class LibraryUiTests : Form
                     typeof(LayoutCanvas).GetMethod("OnMouseUp", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(map, new object[] { click });
                     if (map.Selected != 1) throw new Exception("Clicking the name tag of a client hidden behind another did not select it.");
                     lines.Add("PASS: a client hidden behind a bigger one is selected through its name tag");
+                    // A typed layer is kept when you click away (no Enter needed).
+                    map.Selected = 0; map.Refresh(); typeof(MainForm).GetMethod("UpdateSlotDetails", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(layeredForm, null);
+                    layerField.Focus(); layerField.Text = "4";
+                    typeof(Control).GetMethod("OnMouseDown", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(map, new object[] { new MouseEventArgs(MouseButtons.Left, 1, 1, 1, 0) });
+                    if (bigSlot.Layer != 4) throw new Exception("A typed layer was lost when clicking the map without pressing Enter.");
+                    layerField.Text = "5"; typeof(Form).GetMethod("OnDeactivate", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(layeredForm, new object[] { EventArgs.Empty });
+                    if (bigSlot.Layer != 5) throw new Exception("A typed layer was lost when switching to another app.");
+                    lines.Add("PASS: a typed layer is saved when clicking the map or switching apps, without pressing Enter");
                     map.Selected = 0; map.Refresh();
                     using (var hidden = new Bitmap(layeredForm.Width, layeredForm.Height)) { layeredForm.DrawToBitmap(hidden, new Rectangle(Point.Empty, layeredForm.Size)); hidden.Save(Path.Combine(output, "workspace-hidden-tag.png")); }
                     layeredForm.Close();

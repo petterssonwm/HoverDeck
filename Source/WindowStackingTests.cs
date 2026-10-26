@@ -33,6 +33,13 @@ internal static class WindowStackingTests
         check("Covering the taskbar also lifts clients on higher layers, and only those", backend.Topmost.SetEquals(new[] { big.Handle, small.Handle }) && saved.Count == 2);
         backend.Foreground = 999; coverage.Update(new(new[] { big, small, other }, new[] { big }, stack));
         check("Leaving the game restores the lifted higher-layer clients too", backend.Topmost.Count == 0 && saved.Count == 0);
+        backend.Foreground = big.Handle;
+        coverage.Update(new(new[] { big, small, other }, Array.Empty<GameWindow>(), stack));
+        check("While playing, higher layers stay in the front band even without taskbar coverage (no flicker on click)", backend.Topmost.SetEquals(new[] { small.Handle }) && saved.Count == 1);
+        coverage.Update(new(new[] { big, small, other }, Array.Empty<GameWindow>(), new Dictionary<nint, int> { [big.Handle] = 1, [small.Handle] = 1, [other.Handle] = 1 }));
+        check("Clients all on one layer are never put in the front band", backend.Topmost.Count == 0 && saved.Count == 0);
+        backend.Foreground = 999; coverage.Update(new(new[] { big, small, other }, Array.Empty<GameWindow>(), stack));
+        check("Switching to another app takes higher layers out of the front band", backend.Topmost.Count == 0);
     }
 
     private sealed class FakeOrder(params nint[] frontToBack) : IWindowOrderBackend

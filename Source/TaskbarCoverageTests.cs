@@ -133,6 +133,19 @@ internal sealed class TaskbarCoverageIntegrationTests : Form
                     if (z[0] != otherApp.Handle || z.IndexOf(smallClient.Handle) > z.IndexOf(bigClient.Handle)) throw new Exception("Layer ordering pulled game windows in front of another app.");
                     if (Native.GetForegroundWindow() != foreground) throw new Exception("Layer ordering changed keyboard focus.");
                     lines.Add("PASS: layer ordering keeps another app in front and does not change keyboard focus.");
+                    // No flicker: while playing, the higher layer is in the front band, so "clicking" the lower one cannot cover it.
+                    var flickerBackend = new SimulatedFocusBackend { Foreground = bigClient.Handle }; var flickerSaved = new List<WindowLayerSnapshot>();
+                    var flickerCoverage = new TaskbarCoverage(flickerBackend, saved => flickerSaved = saved);
+                    var bigWindow = new GameWindow(bigClient.Handle, process.Id, process.StartTime.ToUniversalTime().Ticks, Environment.ProcessPath!, "Big", bigClient.Bounds, false);
+                    var smallWindow = bigWindow with { Handle = smallClient.Handle, Bounds = smallClient.Bounds };
+                    var flickerTargets = new CoverageTargets(new[] { bigWindow, smallWindow }, Array.Empty<GameWindow>(), stack);
+                    flickerCoverage.Update(flickerTargets); WindowStacking.Apply(order, stack); await Task.Delay(200);
+                    Native.SetWindowPos(bigClient.Handle, 0, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010); // a click raises the big client, with no restack afterwards
+                    nint visibleAfterClick = Native.GetAncestor(Native.WindowFromPoint(new(smallClient.Left + 150, smallClient.Top + 100)), 2);
+                    if (visibleAfterClick != smallClient.Handle) throw new Exception("Raising the lower-layer client still covered the higher layer.");
+                    flickerBackend.Foreground = 0; flickerCoverage.Update(flickerTargets); await Task.Delay(150);
+                    if (Native.IsTopmost(smallClient.Handle) || flickerSaved.Count != 0) throw new Exception("Leaving the game kept the higher layer in the front band.");
+                    lines.Add("PASS: while playing, raising the lower-layer client never covers the higher layer (no flicker), and leaving restores normal stacking.");
                     bigClient.Close(); smallClient.Close(); otherApp.Close();
                 }
                 if (fixturePath is not null)

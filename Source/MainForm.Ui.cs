@@ -99,6 +99,8 @@ public sealed partial class MainForm
         hotkey.Click += (_, _) => ChooseHotkey();
         profiles.SelectedIndexChanged += (_, _) => { if (!syncing && profiles.SelectedItem is Layout chosen) { layout = chosen; settings.ActiveLayout = chosen.Name; launcher.Bindings.Clear(); BindLayout(); SaveSoon(); } };
         count.ValueChanged += (_, _) => { if (syncing) return; while (layout.Slots.Count < count.Value) layout.Slots.Add(DefaultSlot(layout, layout.Slots.Count)); while (layout.Slots.Count > count.Value) layout.Slots.RemoveAt(layout.Slots.Count - 1); BindSlots(Math.Min(canvas.Selected, layout.Slots.Count - 1)); SaveSoon(); };
+        // Typed numbers commit when you click elsewhere or switch apps, not only on Enter.
+        canvas.MouseDown += (_, _) => CommitTypedNumbers(); slots.MouseDown += (_, _) => CommitTypedNumbers(); Deactivate += (_, _) => CommitTypedNumbers();
         slots.SelectedIndexChanged += (_, _) => { if (!syncing && slots.SelectedIndex >= 0) { canvas.Selected = slots.SelectedIndex; UpdateSlotDetails(); canvas.Invalidate(); } };
         slots.DoubleClick += async (_, _) => await ConfigureClientLogin(); edit.Click += async (_, _) => await ConfigureClientLogin();
         canvas.SelectionChanged += () => { slots.SelectedIndex = canvas.Selected; UpdateSlotDetails(); };
@@ -243,6 +245,8 @@ public sealed partial class MainForm
         }
         if (restart && !cancelled) await RunLayout(true);
     }
+    // Reading NumericUpDown.Value parses any pending typed text and raises ValueChanged.
+    private void CommitTypedNumbers() { foreach (var number in new[] { layer, posX, posY, sizeW, sizeH, count }) _ = number.Value; }
     private void UpdateApplyButton()
     {
         int moved = layout.Slots.Count(s => canvas.Assigned.TryGetValue(s.Id, out var w) && !w.Minimized && w.Bounds != s.Bounds);

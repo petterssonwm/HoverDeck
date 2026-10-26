@@ -51,13 +51,19 @@ internal sealed class TaskbarCoverage(IWindowLayerBackend backend, Action<List<W
         bool playing = targets.Tracked.Any(w => w.Handle == foreground && backend.Exists(WindowLayerSnapshot.From(w)));
         var desired = playing ? targets.Fullscreen.Where(w => !w.Minimized && backend.CanCover(w.Handle)).Select(WindowLayerSnapshot.From)
             .Where(backend.Exists).DistinctBy(w => w.Handle).ToDictionary(w => w.Handle) : new Dictionary<long, WindowLayerSnapshot>();
-        // A covered client must not jump in front of clients on higher layers: lift those too.
-        if (desired.Count > 0 && targets.Layers is { } layers)
+        // While playing, clients above the lowest layer join the topmost band. Clicking a lower-layer
+        // client then cannot raise it over them (no flicker), and a covered fullscreen client cannot
+        // jump in front of them either. Leaving the game restores them like any covered client.
+        if (playing && targets.Layers is { } layers)
         {
             int Layer(long handle) => layers.TryGetValue((nint)handle, out var layer) ? layer : 1;
-            int lowest = desired.Keys.Min(Layer);
-            foreach (var w in targets.Tracked.Where(w => !w.Minimized && Layer(w.Handle) > lowest && !desired.ContainsKey(w.Handle) && backend.CanCover(w.Handle)))
-                if (WindowLayerSnapshot.From(w) is var snap && backend.Exists(snap)) desired[snap.Handle] = snap;
+            var visible = targets.Tracked.Where(w => !w.Minimized && backend.CanCover(w.Handle)).ToList();
+            if (visible.Select(w => Layer(w.Handle)).Distinct().Count() > 1)
+            {
+                int lowest = visible.Min(w => Layer(w.Handle));
+                foreach (var w in visible.Where(w => Layer(w.Handle) > lowest && !desired.ContainsKey(w.Handle)))
+                    if (WindowLayerSnapshot.From(w) is var snap && backend.Exists(snap)) desired[snap.Handle] = snap;
+            }
         }
         var errors = new List<Exception>(); bool removed = false;
         foreach (var old in changed.Values.ToArray())
