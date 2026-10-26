@@ -10,9 +10,19 @@ internal static class AppTheme
         Ink = Color.FromArgb(242, 244, 248), Muted = Color.FromArgb(139, 147, 163), Caption = Color.FromArgb(111, 119, 135),
         Blue = Color.FromArgb(20, 142, 255), BlueDark = Color.FromArgb(13, 116, 223), BlueText = Color.FromArgb(90, 174, 255), BlueWash = Color.FromArgb(13, 42, 71), Online = Color.FromArgb(58, 209, 111), Selected = Color.FromArgb(27, 42, 61);
 
+    private static Icon? appIcon; private static Image? logo;
+    public static Icon AppIcon => appIcon ??= Load(s => new Icon(s)) ?? SystemIcons.Application;
+    public static Image? Logo => logo ??= Load(Image.FromStream);
+    private static T? Load<T>(Func<Stream, T> read) where T : class
+    {
+        string name = typeof(T) == typeof(Icon) ? "HoverDeck.App.ico" : "HoverDeck.Logo.png";
+        using var stream = typeof(AppTheme).Assembly.GetManifestResourceStream(name);
+        if (stream is null) return null;
+        var copy = new MemoryStream(); stream.CopyTo(copy); copy.Position = 0; return read(copy); // GDI+ images need their stream kept open
+    }
     public static void Apply(Form form)
     {
-        form.BackColor = Surface; form.ForeColor = Ink;
+        form.BackColor = Surface; form.ForeColor = Ink; form.Icon = AppIcon;
         Style(form);
     }
     public static void Style(Control parent)

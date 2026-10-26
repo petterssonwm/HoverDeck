@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\HoverDeck.ico</ApplicationIcon>
     <AssemblyName>HoverDeck</AssemblyName>
     <RootNamespace>HoverDeck</RootNamespace>
     <Version>1.7.0</Version>
@@ -16,6 +17,10 @@
   <ItemGroup>
     <!-- Where installed copies look for updates; set by release.ps1 (empty = updates off). -->
     <AssemblyMetadata Include="UpdateRepository" Value="$(UpdateRepository)" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\HoverDeck.ico" LogicalName="HoverDeck.App.ico" />
+    <EmbeddedResource Include="Assets\HoverDeck-logo.png" LogicalName="HoverDeck.Logo.png" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />

@@ -52,7 +52,7 @@ public sealed partial class MainForm : Form
         this.preview = preview;
         Text = "HoverDeck — WoW workspace"; FormBorderStyle = FormBorderStyle.None; Size = new(1330, 930); MinimumSize = new(1080, 760); StartPosition = FormStartPosition.CenterScreen;
         Font = new("Segoe UI", 10); BackColor = Background; ForeColor = Ink; AutoScaleMode = AutoScaleMode.Dpi;
-        Icon = SystemIcons.Application;
+        Icon = AppTheme.AppIcon;
         settings = previewSettings ?? Storage.Load(); desktopState = new DesktopState(); monitors = desktopState.Monitors;
         if (settings.Layouts.Count == 0)
         {

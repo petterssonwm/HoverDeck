@@ -165,11 +165,9 @@ internal sealed class LauncherLogo : Control
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics; g.Clear(BackColor); g.SmoothingMode = SmoothingMode.AntiAlias;
-        var tile = new Rectangle(0, (Height - 26) / 2, 26, 26);
-        using (var fill = new LinearGradientBrush(tile, Color.FromArgb(58, 166, 255), Color.FromArgb(10, 95, 196), 45f))
-        using (var path = Round(tile, 6)) g.FillPath(fill, path);
-        TextRenderer.DrawText(g, "H", Font, tile, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-        DrawTracked(g, "HOVERDECK", Font, Ink, new Rectangle(38, 0, Width - 38, Height), 1f);
+        var mark = new Rectangle(0, (Height - 32) / 2, 32, 32);
+        if (AppTheme.Logo is { } logo) { g.InterpolationMode = InterpolationMode.HighQualityBicubic; g.PixelOffsetMode = PixelOffsetMode.HighQuality; g.DrawImage(logo, mark); }
+        DrawTracked(g, "HOVERDECK", Font, Ink, new Rectangle(42, 0, Width - 42, Height), 1f);
     }
 }
 

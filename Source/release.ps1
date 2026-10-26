@@ -49,7 +49,7 @@ if (-not $LocalFeed) {
 $notesFile = Join-Path $work "notes-$Version.md"
 Set-Content -Path $notesFile -Value ($(if ($Notes) { $Notes } else { "HoverDeck $Version" })) -Encoding utf8
 $pack = @('pack', '-u', $PackId, '-v', $Version, '-p', $publish, '-e', 'HoverDeck.exe', '--packTitle', 'HoverDeck', '--packAuthors', 'HoverDeck',
-          '--framework', 'net8-x64-desktop,webview2', '--exclude', '\.(pdb|xml)$', '--releaseNotes', $notesFile, '-o', $packages)
+          '--framework', 'net8-x64-desktop,webview2', '--icon', (Join-Path $PSScriptRoot 'Assets\HoverDeck.ico'), '--exclude', '\.(pdb|xml)$', '--releaseNotes', $notesFile, '-o', $packages)
 if ($NoShortcuts) { $pack += @('--shortcuts', 'None') }
 Write-Host "Packing installer and update..."
 & vpk @pack
