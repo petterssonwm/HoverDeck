@@ -28,6 +28,7 @@ If you run more than one WoW client at a time (multiboxing, or just keeping an a
 - **Hover focus.** Point at a game window and it gets keyboard focus, without clicking and without bringing it to the front. Toggle it with a button or a global shortcut (Ctrl+Alt+H by default). Your original Windows settings are restored when HoverDeck closes, even after a crash.
 - **Layers for overlapping clients.** Put a small window (say, a healer) on top of a full-screen main: give it a higher *Layer* and it always stays in front, even when you click or hover-focus the big window behind it. Other apps are never pushed behind your game.
 - **Apply positions.** Moved a client on the map? An *Apply positions* button appears and moves the open windows into place without launching anything.
+- **Edit or delete any client** from its right-click menu or the client editor.
 - **Close or restart all clients** from the arrow on *Start clients*.
 - **Arrange your Windows displays** (monitor positions and primary display) from inside HoverDeck, with a 20-second "keep or revert" safety net.
 - **Minimize your way.** Minimize to the notification area (default) or to the taskbar like any other window.

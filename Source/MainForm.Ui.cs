@@ -102,6 +102,19 @@ public sealed partial class MainForm
         // Typed numbers commit when you click elsewhere or switch apps, not only on Enter.
         canvas.MouseDown += (_, _) => CommitTypedNumbers(); slots.MouseDown += (_, _) => CommitTypedNumbers(); Deactivate += (_, _) => CommitTypedNumbers();
         slots.SelectedIndexChanged += (_, _) => { if (!syncing && slots.SelectedIndex >= 0) { canvas.Selected = slots.SelectedIndex; UpdateSlotDetails(); canvas.Invalidate(); } };
+        var clientContext = new ContextMenuStrip { Name = "ClientContext", Renderer = new WorkspaceMenuRenderer(), ShowImageMargin = false, Font = new("Segoe UI", 10f) };
+        var editItem = new ToolStripMenuItem("Edit client…") { Padding = new(8, 4, 8, 4) }; editItem.Click += async (_, _) => await ConfigureClientLogin();
+        var deleteItem = new ToolStripMenuItem("Delete client") { Name = "DeleteClientMenu", Padding = new(8, 4, 8, 4), ForeColor = Color.FromArgb(255, 128, 118) };
+        deleteItem.Click += (_, _) => { if (CurrentSlot is { } s) DeleteClient(s); };
+        clientContext.Items.AddRange(new ToolStripItem[] { editItem, new ToolStripSeparator(), deleteItem });
+        clientContext.Opening += (_, e) => { e.Cancel = busy || CurrentSlot is null; deleteItem.Enabled = layout.Slots.Count > 1; };
+        slots.MouseDown += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Right) return;
+            int index = slots.IndexFromPoint(e.Location); if (index < 0) return;
+            slots.SelectedIndex = index; clientContext.Show(slots, e.Location);
+        };
+        canvas.ClientContextRequested += location => clientContext.Show(canvas, location);
         slots.DoubleClick += async (_, _) => await ConfigureClientLogin(); edit.Click += async (_, _) => await ConfigureClientLogin();
         canvas.SelectionChanged += () => { slots.SelectedIndex = canvas.Selected; UpdateSlotDetails(); };
         canvas.LayoutEdited += () => { UpdateSlotDetails(); UpdateApplyButton(); SaveSoon(); };

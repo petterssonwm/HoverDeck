@@ -59,7 +59,10 @@ internal sealed class ClientLaunchForm : Form
         var legacyRefresh = Button("Refresh legacy launcher choices", 310); advanced.Body.Controls.Add(legacyRefresh);
         root.Controls.Add(info, 0, 2);
         var actions = Row(); actions.FlowDirection = FlowDirection.RightToLeft;
-        var save = Button("Save", 110); save.Name = "SaveLaunch"; var cancel = Button("Cancel", 110); cancel.DialogResult = DialogResult.Cancel; actions.Controls.AddRange(new Control[] { save, cancel }); root.Controls.Add(actions, 0, 3); AcceptButton = save; CancelButton = cancel; AppTheme.Style(this);
+        var save = Button("Save", 110); save.Name = "SaveLaunch"; var cancel = Button("Cancel", 110); cancel.DialogResult = DialogResult.Cancel;
+        var delete = Button("Delete", 110); delete.Name = "DeleteClient"; delete.ForeColor = Color.FromArgb(255, 128, 118); delete.Enabled = layout.Slots.Count > 1;
+        delete.Click += (_, _) => { DialogResult = DialogResult.Abort; Close(); }; // Abort = delete this client (the main window asks to confirm)
+        actions.Controls.AddRange(new Control[] { save, cancel, delete }); root.Controls.Add(actions, 0, 3); AcceptButton = save; CancelButton = cancel; AppTheme.Style(this);
         void ShowMethod()
         {
             bool battleNet = method.SelectedIndex == 1; bnet.Visible = battleNet; direct.Visible = !battleNet; (battleNet ? (Control)bnet : direct).BringToFront();

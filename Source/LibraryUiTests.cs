@@ -74,6 +74,23 @@ internal sealed class LibraryUiTests : Form
                     layeredForm.Close();
                 }
                 lines.Add("PASS: the Layer field shows and edits the selected client's layer; layered layout rendered");
+                var trio = new Settings { Layouts = new() { new() { Name = "Three", Slots = new() { new() { Name = "A" }, new() { Name = "B" }, new() { Name = "C" } } } }, ActiveLayout = "Three" };
+                using (var deleting = new MainForm(true, trio))
+                {
+                    deleting.ShowInTaskbar = false; deleting.Show(); Application.DoEvents();
+                    var middle = trio.Layouts[0].Slots[1]; deleting.RemoveClient(middle);
+                    var counter = Descendants(deleting).OfType<NumericUpDown>().First(n => n.AccessibleName == "Number of clients");
+                    if (trio.Layouts[0].Slots.Select(s => s.Name).SequenceEqual(new[] { "A", "C" }) is false || counter.Value != 2) throw new Exception("Deleting the middle client did not remove exactly that client.");
+                    deleting.RemoveClient(trio.Layouts[0].Slots[0]); deleting.RemoveClient(trio.Layouts[0].Slots[0]);
+                    if (trio.Layouts[0].Slots.Count != 1) throw new Exception("The last client of a layout was deleted.");
+                    deleting.Close();
+                }
+                using (var editor = new ClientLaunchForm(trio.Layouts[0].Slots[0], new Layout { Slots = new() { new(), new() } }, settings))
+                {
+                    var del = (Button)editor.Controls.Find("DeleteClient", true).Single(); editor.Show(); del.PerformClick();
+                    if (editor.DialogResult != DialogResult.Abort) throw new Exception("Edit client's Delete button does not request deletion.");
+                }
+                lines.Add("PASS: deleting removes exactly the chosen client, keeps the last one, and Edit client has a Delete button");
                 var modeEditor = new MainForm(true, settings) { Size = new(1080, 760) };
                 var mode = (ComboBox)modeEditor.Controls.Find("ClientWindowMode", true).Single();
                 mode.SelectedIndex = (int)ClientWindowMode.FullscreenWindowed;

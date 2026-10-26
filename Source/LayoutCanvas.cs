@@ -17,6 +17,7 @@ public sealed class LayoutCanvas : Control
     public int SelectedMonitor { get; set; }
     public Dictionary<string, GameWindow> Assigned { get; set; } = new();
     public event Action? SelectionChanged;
+    public event Action<Point>? ClientContextRequested;
     public event Action? LayoutEdited;
     public event Action? MonitorSelectionChanged;
     public event Action? MonitorsEdited;
@@ -190,6 +191,14 @@ public sealed class LayoutCanvas : Control
                 draggingMonitor = true; Capture = true; MonitorSelectionChanged?.Invoke(); Invalidate(); break;
             }
             return;
+        }
+        if (e.Button == MouseButtons.Right && Layout is not null)
+        {
+            // Right-click selects the client under the pointer (its name tag first) and opens its menu.
+            int hit = LabelAt(e.Location);
+            if (hit < 0) hit = DrawOrder().Reverse().FirstOrDefault(i => Map(Layout.Slots[i].Bounds).Contains(e.Location), -1);
+            if (hit < 0) return;
+            Selected = hit; SelectionChanged?.Invoke(); Invalidate(); ClientContextRequested?.Invoke(e.Location); return;
         }
         if (e.Button != MouseButtons.Left || Layout is null) return;
         // A name tag always wins: it is the way to reach a client hidden behind another one.

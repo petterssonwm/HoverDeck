@@ -1,4 +1,4 @@
-HOVERDECK 1.7.2 — WoW workspace
+HOVERDECK 1.7.3 — WoW workspace
 
 Open HoverDeck.exe. Requires Windows x64, .NET 8 Windows Desktop Runtime and Microsoft Edge WebView2 Runtime.
 Downloads: https://dotnet.microsoft.com/download/dotnet/8.0 and https://developer.microsoft.com/microsoft-edge/webview2/ (Evergreen Runtime).
@@ -14,7 +14,7 @@ Publishing (for the maintainer): in the Source folder run .\release.ps1 -Version
 
 WHERE THINGS LIVE
 
-Main workspace: the left sidebar holds the saved layout, the number of clients (− / +) and one card per client showing its account and whether it is OPEN or PLANNED. The selected layout's name is shown above the display map; arrange the client rectangles on the map. Select a client to edit its Window mode and X/Y/width/height below the map. Fit client offers Fit screen, Left half and Right half for the selected display. Edit client opens its launch/login setup; double-clicking a client card does the same.
+Main workspace: the left sidebar holds the saved layout, the number of clients (− / +) and one card per client showing its account and whether it is OPEN or PLANNED. The selected layout's name is shown above the display map; arrange the client rectangles on the map. Select a client to edit its Window mode and X/Y/width/height below the map. Fit client offers Fit screen, Left half and Right half for the selected display. Edit client opens its launch/login setup; double-clicking a client card does the same. To delete a client, right-click its card or its rectangle on the map and choose Delete client, or use Delete in Edit client; HoverDeck asks first, a running game is not closed, and a layout always keeps at least one client. The − next to CLIENTS removes the last client.
 
 The top bar works as the window's title bar: drag it to move HoverDeck, double-click it to maximize, and use the minimize / maximize / close buttons at its right end. The window edges resize and Windows snap works as usual. Minimizing hides HoverDeck to the notification area by default; turn off Settings > Minimize to notification area to minimize it to the taskbar like a normal window instead.
 

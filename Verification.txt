@@ -1,3 +1,7 @@
+HoverDeck 1.7.3 verification — 2026-10-26
+
+Added Delete client: right-click a client card or a client on the map (Edit client… / Delete client), or Delete next to Cancel and Save in Edit client. A confirmation is required, the last client of a layout cannot be deleted, the client's window binding is dropped and running games are not closed. All 167 regression checks and all 36 UI checks passed, including deleting the middle of three clients, refusing to delete the last client, and the editor's Delete button requesting deletion.
+
 HoverDeck 1.7.2 verification — 2026-10-26
 
 Added client layers: each client has a Layer (1 = back). Where clients overlap, higher layers stay in front even after the lower client is clicked or hover-focused. HoverDeck reorders only the game windows among themselves (asynchronously, without activation), keeping the frontmost game window's place relative to other apps; it re-checks on every foreground change and every 150 ms. Taskbar coverage lifts higher-layer clients together with a covered fullscreen client and restores them through the existing recovery journal. The map draws and hit-tests clients in layer order.
