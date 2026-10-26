@@ -90,22 +90,19 @@ internal sealed class TaskbarCoverage(IWindowLayerBackend backend, Action<List<W
         if (removed) persist(changed.Values.ToList());
         foreach (var window in desired.Values.OrderBy(w => w.Handle == foreground.ToInt64()))
         {
+            nint handle = (nint)window.Handle;
             try
             {
-                bool topmost = backend.IsTopmost((nint)window.Handle);
-                if (!changed.ContainsKey(window.Handle))
+                // A game's own topmost flag is kept (and not recorded), but it may still need lifting above a raised taskbar.
+                // A window is recorded before it is changed; one Windows refuses stays recorded, which is harmless to restore.
+                bool topmost = backend.IsTopmost(handle);
+                if (!topmost && !changed.ContainsKey(window.Handle))
                 {
-                    if (topmost)
-                    {
-                        // Keep a game's existing topmost flag, but allow it above a raised taskbar.
-                        if (backend.TaskbarAbove((nint)window.Handle)) backend.SetTopmost((nint)window.Handle, true);
-                        continue;
-                    }
                     changed.Add(window.Handle, window);
                     try { persist(changed.Values.ToList()); }
                     catch { changed.Remove(window.Handle); throw; }
                 }
-                if (!topmost || backend.TaskbarAbove((nint)window.Handle)) backend.SetTopmost((nint)window.Handle, true);
+                if (!topmost || backend.TaskbarAbove(handle)) backend.SetTopmost(handle, true);
             }
             catch (Exception ex) { errors.Add(ex); }
         }

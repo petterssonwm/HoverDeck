@@ -49,28 +49,25 @@ public sealed class LayoutCanvas : Control
     public void FitView() { displayViewBounds = null; Invalidate(); }
     private RectangleF Map(Rectangle r) => new((float)(offset.X + r.X * scale), (float)(offset.Y + r.Y * scale), (float)(r.Width * scale), (float)(r.Height * scale));
     internal RectangleF Project(Rectangle r) { Transform(); return Map(r); }
+    // The map repaints on every mouse move while dragging, so its fixed fonts, brushes and pens are made once.
+    private static readonly Font small = new("Segoe UI", 9), regular = new("Segoe UI", 10, FontStyle.Bold), numberFont = new("Segoe UI", 21, FontStyle.Bold);
+    private static readonly Pen gridPen = new(Color.FromArgb(20, 24, 33)), taskbarPen = new(TaskbarColor, 1), framePen = new(AppTheme.Line), liveEdge = new(Color.FromArgb(235, 241, 250), 1) { DashStyle = DashStyle.Dash };
+    private static readonly Brush muted = new SolidBrush(Color.FromArgb(111, 119, 135)), number = new SolidBrush(Color.FromArgb(74, 82, 98)), monitorFill = new SolidBrush(Color.FromArgb(22, 26, 34)),
+        tagBack = new SolidBrush(Color.FromArgb(15, 19, 26)), tagText = new SolidBrush(Color.FromArgb(139, 147, 163)),
+        taskbarHatch = new HatchBrush(HatchStyle.ForwardDiagonal, Color.FromArgb(144, 119, 77), Color.FromArgb(67, 59, 44));
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e); Transform();
         var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
-        using var gridPen = new Pen(Color.FromArgb(20, 24, 33));
         for (int x = 0; x < Width; x += 24) g.DrawLine(gridPen, x, 0, x, Height);
         for (int y = 0; y < Height; y += 24) g.DrawLine(gridPen, 0, y, Width, y);
-        using var small = new Font("Segoe UI", 9);
-        using var regular = new Font("Segoe UI", 10, FontStyle.Bold);
-        using var numberFont = new Font("Segoe UI", 21, FontStyle.Bold);
-        using var muted = new SolidBrush(Color.FromArgb(111, 119, 135));
-        using var number = new SolidBrush(Color.FromArgb(74, 82, 98));
-        using var taskbarHatch = new HatchBrush(HatchStyle.ForwardDiagonal, Color.FromArgb(144, 119, 77), Color.FromArgb(67, 59, 44));
-        using var taskbarPen = new Pen(TaskbarColor, 1);
         if (Monitors.Count == 0) { g.DrawString("No displays detected", regular, Brushes.White, 30, 60); return; }
         var covered = !DisplayEditMode && Layout is not null ? Layout.Slots.Where(s => s.WindowMode == ClientWindowMode.FullscreenWindowed).Select(s => s.Bounds).ToArray() : Array.Empty<Rectangle>();
         for (int i = 0; i < Monitors.Count; i++)
         {
             var m = Monitors[i]; var r = Map(m.Bounds);
-            using var fill = new SolidBrush(Color.FromArgb(22, 26, 34));
             using var border = new Pen(DisplayEditMode && i == SelectedMonitor ? AppTheme.Blue : m.Primary ? Color.FromArgb(59, 90, 128) : Color.FromArgb(44, 50, 61), DisplayEditMode && i == SelectedMonitor ? 3 : 2);
-            g.FillRectangle(fill, r); g.DrawRectangle(border, r.X, r.Y, r.Width, r.Height);
+            g.FillRectangle(monitorFill, r); g.DrawRectangle(border, r.X, r.Y, r.Width, r.Height);
             g.DrawString(DisplayNumber(m, i), numberFont, number, r.X + 12, r.Y + 8);
             var description = $"{m.Bounds.Width} × {m.Bounds.Height}" + (m.Primary ? "  ·  Primary" : "");
             g.DrawString(description, small, muted, r.X + 12, r.Bottom - 26);
@@ -126,9 +123,9 @@ public sealed class LayoutCanvas : Control
             if (visible.Width < 4 || visible.Height < 4) continue;
             labelHandles.Add((i, visible));
             var clip = g.Save(); g.SetClip(r, CombineMode.Intersect);
-            using (var back = new SolidBrush(Color.FromArgb(15, 19, 26))) g.FillRectangle(back, band);
+            g.FillRectangle(tagBack, band);
             if (i == Selected) { using var mark = new SolidBrush(color); g.FillRectangle(mark, band.X, band.Bottom - 2, band.Width, 2); }
-            if (showTag) { using var tagText = new SolidBrush(Color.FromArgb(139, 147, 163)); g.DrawString(tag, small, tagText, r.X + 9 + labelWidth + 6, band.Y + 8); }
+            if (showTag) g.DrawString(tag, small, tagText, r.X + 9 + labelWidth + 6, band.Y + 8);
             using var text = new SolidBrush(color);
             g.DrawString(label, regular, text, r.X + 9, band.Y + 6);
             g.Restore(clip);
@@ -139,10 +136,9 @@ public sealed class LayoutCanvas : Control
             var slot = Layout.Slots[i];
             if (!Assigned.TryGetValue(slot.Id, out var live) || live.Minimized || live.Bounds == slot.Bounds) continue;
             var actual = Map(live.Bounds);
-            using var liveEdge = new Pen(Color.FromArgb(235, 241, 250), 1) { DashStyle = DashStyle.Dash };
             g.DrawRectangle(liveEdge, actual.X, actual.Y, actual.Width, actual.Height);
         }
-        using (var frame = new Pen(AppTheme.Line)) g.DrawRectangle(frame, 0, 0, Width - 1, Height - 1);
+        g.DrawRectangle(framePen, 0, 0, Width - 1, Height - 1);
         g.DrawString(DisplayEditMode ? "Zoom stays fixed · Fit view to show all displays · Ctrl disables snapping" : "Drag to move  ·  Bottom-right corner to resize  ·  Ctrl disables snapping", small, muted, 20, Height - 25);
     }
     // Snaps a dragged or resized client to the nearest guide line per direction. Only the single

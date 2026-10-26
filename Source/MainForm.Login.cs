@@ -23,7 +23,7 @@ public sealed partial class MainForm
     private async Task ConfigureClientLogin()
     {
         if (busy || displayApplying || arrangeDisplays.Checked || CurrentSlot is not { } slot) return;
-        var window = launcher.Assign(layout, launcher.Scan(layout)).GetValueOrDefault(slot.Id);
+        launcher.Assign(layout, launcher.Scan(layout)); // keeps the bindings current for the login editor below
         busy = true; hover?.Suspend(true); mainMenu.Enabled = false; SetWorkspaceEnabled(false); start.Enabled = false;
         try
         {
@@ -41,7 +41,7 @@ public sealed partial class MainForm
             if (result == DialogResult.Abort) { deleteAfterEdit = slot; return; }
             if (result != DialogResult.Retry) return;
             var directDraft = launch.Result;
-            window = Matching.Assign(new Layout { Executable = layout.Executable, Slots = new() { directDraft } }, Native.Windows(new[] { directDraft.PathFor(layout) }), launcher.Bindings).GetValueOrDefault(slot.Id);
+            var window = Matching.Assign(new Layout { Executable = layout.Executable, Slots = new() { directDraft } }, Native.Windows(new[] { directDraft.PathFor(layout) }), launcher.Bindings).GetValueOrDefault(slot.Id);
             var edit = await ClientLoginEditor.Edit(this, directDraft, layout, window);
             if (edit is null) return;
             slot.Name = directDraft.Name; slot.Executable = directDraft.Executable; slot.LaunchMethod = ClientLaunchMethod.Direct; slot.Login = edit.Login; launcher.Bindings.Remove(slot.Id); BindSlots(canvas.Selected); SaveNow();

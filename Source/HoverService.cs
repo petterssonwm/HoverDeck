@@ -12,8 +12,11 @@ public sealed class HoverSnapshot
     public int Raise { get; set; }
     public int Delay { get; set; }
     public List<WindowLayerSnapshot> WindowLayers { get; set; } = new();
+    // Window stacking failures are reported as an AggregateException, and only once the Windows
+    // settings are back; a failure to restore the settings themselves is thrown as it is.
     public void Restore()
     {
+        var errors = new List<Exception>();
         try
         {
             Native.Setting(0x1001, 0);
@@ -23,10 +26,9 @@ public sealed class HoverSnapshot
         }
         finally
         {
-            var errors = new List<Exception>();
             foreach (var window in WindowLayers) try { window.Restore(); } catch (Exception ex) { errors.Add(ex); }
-            if (errors.Count > 0) throw new AggregateException("Could not restore client window stacking.", errors);
         }
+        if (errors.Count > 0) throw new AggregateException("Could not restore client window stacking.", errors);
     }
 }
 
@@ -43,7 +45,7 @@ public sealed class HoverService : IDisposable
     private HoverSnapshot? snapshot;
     private volatile HashSet<nint> eligible = new();
     private bool enabled, nativeEnabled, suspended;
-    private int delay;
+    private readonly int delay;
     private nint hook;
     private Native.HookProc? callback;
     private System.Windows.Forms.Timer? timer;
@@ -67,10 +69,23 @@ public sealed class HoverService : IDisposable
     public static void RecoverIfNeeded()
     {
         if (!File.Exists(RecoveryPath)) return;
-        var old = JsonSerializer.Deserialize<HoverSnapshot>(File.ReadAllText(RecoveryPath), Storage.Json);
-        if (old is null) return;
-        try { using var p = Process.GetProcessById(old.ProcessId); if (p.StartTime.ToUniversalTime().Ticks == old.Started && !p.HasExited) return; } catch (ArgumentException) { }
-        old.Restore(); File.Delete(RecoveryPath);
+        HoverSnapshot? old;
+        try { old = JsonSerializer.Deserialize<HoverSnapshot>(File.ReadAllText(RecoveryPath), Storage.Json); }
+        catch (JsonException) { File.Delete(RecoveryPath); return; } // unreadable: nothing left that could be restored
+        if (old is null || Running(old.ProcessId, old.Started)) return;
+        Recover(old);
+    }
+    private static bool Running(int pid, long started)
+    {
+        try { using var p = Process.GetProcessById(pid); return p.StartTime.ToUniversalTime().Ticks == started && !p.HasExited; }
+        catch { return false; } // gone, or a different process we may not inspect
+    }
+    // Restores what a run left behind. A client window that can no longer be restored (closed, or
+    // running as administrator) must not keep the recovery file, or hover focus could never start again.
+    private static void Recover(HoverSnapshot old)
+    {
+        try { old.Restore(); } catch (AggregateException) { }
+        File.Delete(RecoveryPath);
     }
     public static void Watch(int pid, long start)
     {
@@ -84,7 +99,7 @@ public sealed class HoverService : IDisposable
             {
                 if (!File.Exists(RecoveryPath)) return;
                 var old = JsonSerializer.Deserialize<HoverSnapshot>(File.ReadAllText(RecoveryPath), Storage.Json);
-                if (old?.ProcessId == pid && old.Started == start) { old.Restore(); File.Delete(RecoveryPath); }
+                if (old?.ProcessId == pid && old.Started == start) Recover(old);
             }
             finally { mutex.ReleaseMutex(); }
         }
@@ -143,7 +158,8 @@ public sealed class HoverService : IDisposable
     {
         if (code >= 0)
         {
-            try { var mouse = Marshal.PtrToStructure<Native.MOUSEHOOK>(lp); Gate(mouse.Point); }
+            // Runs for every mouse event system-wide: read the point without allocating.
+            try { Gate(new(Marshal.ReadInt32(lp), Marshal.ReadInt32(lp, 4))); }
             catch (Exception ex) { Error = ex.Message; enabled = false; try { Native.Setting(0x1001, 0); nativeEnabled = false; } catch { } }
         }
         return Native.CallNextHookEx(hook, code, wp, lp);
@@ -155,9 +171,9 @@ public sealed class HoverService : IDisposable
     }
     private void Gate(Native.POINT point)
     {
-        var root = Native.GetAncestor(Native.WindowFromPoint(point), 2);
         bool pressed = (Native.GetAsyncKeyState(1) & 0x8000) != 0 || (Native.GetAsyncKeyState(2) & 0x8000) != 0;
-        bool desired = enabled && !suspended && !pressed && eligible.Contains(root) && !Native.IsIconic(root);
+        bool desired = enabled && !suspended && !pressed && eligible.Count > 0
+            && Native.GetAncestor(Native.WindowFromPoint(point), 2) is var root && eligible.Contains(root) && !Native.IsIconic(root);
         if (desired == nativeEnabled) return;
         Native.Setting(0x1001, desired ? 1 : 0);
         nativeEnabled = desired;
@@ -178,7 +194,7 @@ public sealed class HoverService : IDisposable
     }
     public void Enable(bool value) => Post(() => { enabled = value; CheckCursor(); });
     public void Suspend(bool value) => Post(() => { suspended = value; CheckCursor(); CheckCoverage(); });
-    public void SetDelay(int value) => Post(() => { delay = value; Native.Setting(0x2003, value); });
+    public void SetDelay(int value) => Post(() => Native.Setting(0x2003, value));
     public void Dispose()
     {
         if (dispatcher is { IsDisposed: false }) dispatcher.BeginInvoke((Action)(() => Application.ExitThread()));

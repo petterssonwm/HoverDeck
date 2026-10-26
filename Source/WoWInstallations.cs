@@ -14,8 +14,7 @@ public sealed class WoWInstallation
     public string Build { get; set; } = "";
     public string Executable { get; set; } = "";
     public string RootFolder { get; set; } = "";
-    public string GameTabId => GameVersion.Contains("Forever", StringComparison.OrdinalIgnoreCase) || Product.StartsWith("wowf") ? "game-nav-btn-WoWF"
-        : Product.Contains("classic") || Product.Contains("anniversary") || GameVersion.Contains("Classic", StringComparison.OrdinalIgnoreCase) || GameVersion.Contains("Anniversary", StringComparison.OrdinalIgnoreCase) ? "game-nav-btn-WoWC" : "game-nav-btn-WoW";
+    public string GameTabId => BattleNetInstallation.TabForVersion(GameVersion, Product);
     public override string ToString() => $"{GameVersion} · {Build}" + (RootFolder.Length > 0 ? " · " + RootFolder : "");
 }
 
@@ -78,15 +77,17 @@ internal static class WoWInstallationScanner
                     if (!seen.Add(candidate)) continue;
                     string metadata = Path.Combine(candidate, ".build.info");
                     if (!File.Exists(metadata)) continue;
-                    foreach (var build in ReadBuilds(File.ReadLines(metadata)))
+                    var builds = ReadBuilds(File.ReadLines(metadata));
+                    if (builds.Count == 0) continue;
+                    // Each version folder and its flavor are read once per installation, not once per product.
+                    var versionFolders = Directory.EnumerateDirectories(candidate).Where(p => (File.GetAttributes(p) & FileAttributes.ReparsePoint) == 0
+                        && (Path.GetFileName(p).StartsWith('_') || File.Exists(Path.Combine(p, ".flavor.info")))).Take(200).Append(candidate)
+                        .Select(p => (Folder: p, Flavor: File.Exists(Path.Combine(p, ".flavor.info")) ? File.ReadLines(Path.Combine(p, ".flavor.info")).Select(l => l.Trim()).FirstOrDefault(l => l.StartsWith("wow", StringComparison.OrdinalIgnoreCase)) ?? "" : "")).ToList();
+                    foreach (var build in builds)
                     {
                         var definition = products.GetValueOrDefault(build.Product);
-                        var versionFolders = Directory.EnumerateDirectories(candidate).Where(p => (File.GetAttributes(p) & FileAttributes.ReparsePoint) == 0
-                            && (Path.GetFileName(p).StartsWith('_') || File.Exists(Path.Combine(p, ".flavor.info")))).Take(200);
-                        foreach (string versionFolder in versionFolders.Append(candidate))
+                        foreach (var (versionFolder, flavor) in versionFolders)
                         {
-                            string flavorPath = Path.Combine(versionFolder, ".flavor.info");
-                            string flavor = File.Exists(flavorPath) ? File.ReadLines(flavorPath).Select(l => l.Trim()).FirstOrDefault(l => l.StartsWith("wow", StringComparison.OrdinalIgnoreCase)) ?? "" : "";
                             bool matches = flavor.Length > 0 ? flavor.Equals(build.Product, StringComparison.OrdinalIgnoreCase) : definition.Folder is not null && Path.GetFileName(versionFolder).Equals(definition.Folder, StringComparison.OrdinalIgnoreCase);
                             if (!matches) continue;
                             string? executable = Directory.EnumerateFiles(versionFolder, "*.exe").Where(p => Path.GetFileName(p).StartsWith("Wow", StringComparison.OrdinalIgnoreCase) && !Path.GetFileName(p).Contains("Launcher", StringComparison.OrdinalIgnoreCase) && !Path.GetFileName(p).Contains("Error", StringComparison.OrdinalIgnoreCase)).OrderBy(p => p.Length).FirstOrDefault();

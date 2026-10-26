@@ -38,7 +38,7 @@ public sealed partial class MainForm
         clientsRow.Controls.Add(new CapsLabel("Clients") { Anchor = AnchorStyles.Left }, 0, 0); clientsRow.Controls.Add(Stepper(), 1, 0); sidebar.Controls.Add(clientsRow, 0, 2);
         slots.Margin = Padding.Empty; sidebar.Controls.Add(slots, 0, 3);
         status.Dock = DockStyle.Fill; status.Margin = new(18, 0, 18, 0); status.TextAlign = ContentAlignment.BottomLeft; sidebar.Controls.Add(status, 0, 4);
-        start.Dock = cancel.Dock = DockStyle.Fill; cancel.Text = "Cancel"; cancel.Font = new("Segoe UI", 10.5f, FontStyle.Bold); cancel.Visible = cancel.Enabled = false;
+        start.Dock = cancel.Dock = DockStyle.Fill; cancel.Font = new("Segoe UI", 10.5f, FontStyle.Bold); cancel.Visible = cancel.Enabled = false;
         launchArea.Controls.Add(start); launchArea.Controls.Add(cancel); sidebar.Controls.Add(launchArea, 0, 5);
         slots.DrawMode = DrawMode.OwnerDrawFixed; slots.ItemHeight = 62; slots.DrawItem += DrawClientItem; mainArea.Controls.Add(sidebar, 0, 0);
 
@@ -95,17 +95,20 @@ public sealed partial class MainForm
             using (var edge = new Pen(AppTheme.ButtonBorder)) e.Graphics.DrawRectangle(edge, 0, 0, e.Bounds.Width - 1, e.Bounds.Height - 1);
             TextRenderer.DrawText(e.Graphics, e.ToolTipText, e.Font, Rectangle.Inflate(e.Bounds, -4, -2), AppTheme.Ink, TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak);
         };
-        start.Text = "Start clients"; hints.SetToolTip(start, "Open missing clients and move every open client into place. Already assigned clients are reused.");
+        hints.SetToolTip(start, "Open missing clients and move every open client into place. Already assigned clients are reused.");
         hints.SetToolTip(apply, "Move the clients that are already open to their positions on the map. Nothing is launched or logged in.");
-        Theme(this); slots.BackColor = AppTheme.Rail; logBox.BackColor = Surface; UpdateHotkeyLabel(); delay.Value = settings.DelayMs;
-        var trayMenu = new ContextMenuStrip { Renderer = new WorkspaceMenuRenderer() }; trayMenu.Items.Add("Open HoverDeck", null, (_, _) => RestoreWindow()); trayMenu.Items.Add("Toggle WoW hover focus", null, (_, _) => toggle.Checked = !toggle.Checked); trayMenu.Items.Add(new ToolStripSeparator()); trayMenu.Items.Add("Exit and restore Windows settings", null, (_, _) => Close());
+        Theme(this); slots.BackColor = AppTheme.Rail; logBox.BackColor = Surface; UpdateHotkeyLabel();
+        var trayMenu = new ContextMenuStrip { Renderer = new WorkspaceMenuRenderer() }; trayMenu.Items.Add("Open HoverDeck", null, (_, _) => RestoreWindow()); trayMenu.Items.Add("Toggle WoW hover focus", null, (_, _) => { if (toggle.Enabled) toggle.Checked = !toggle.Checked; }); trayMenu.Items.Add(new ToolStripSeparator()); trayMenu.Items.Add("Exit and restore Windows settings", null, (_, _) => Close());
         tray = new NotifyIcon { Icon = Icon, Text = "HoverDeck · hover focus off", ContextMenuStrip = trayMenu, Visible = !preview }; tray.DoubleClick += (_, _) => RestoreWindow();
-        Resize += (_, _) => { maximizeButton.Invalidate(); if (!preview && WindowState == FormWindowState.Minimized && settings.MinimizeToTray) Hide(); };
-        toggle.CheckedChanged += (_, _) => { hoverOn = toggle.Checked; hover?.Enable(hoverOn); toggle.Text = "Hover focus " + (hoverOn ? "on" : "off"); tray.Text = "HoverDeck · hover focus " + (hoverOn ? "on" : "off"); Log(hoverOn ? $"WoW hover focus enabled · {settings.DelayMs} ms." : "WoW hover focus paused."); };
-        delay.ValueChanged += (_, _) => { settings.DelayMs = (int)delay.Value; hover?.SetDelay(settings.DelayMs); SaveSoon(); };
-        hotkey.Click += (_, _) => ChooseHotkey();
+        Resize += (_, _) =>
+        {
+            maximizeButton.Invalidate();
+            if (WindowState != FormWindowState.Minimized) restoreState = WindowState; // a maximized window comes back maximized from the tray
+            else if (!preview && settings.MinimizeToTray) Hide();
+        };
+        toggle.CheckedChanged += (_, _) => { bool on = toggle.Checked; hover?.Enable(on); toggle.Text = "Hover focus " + (on ? "on" : "off"); tray.Text = "HoverDeck · hover focus " + (on ? "on" : "off"); Log(on ? $"WoW hover focus enabled · {settings.DelayMs} ms." : "WoW hover focus paused."); };
         profiles.SelectedIndexChanged += (_, _) => { if (!syncing && profiles.SelectedItem is Layout chosen) { layout = chosen; settings.ActiveLayout = chosen.Name; launcher.Bindings.Clear(); BindLayout(); SaveSoon(); } };
-        count.ValueChanged += (_, _) => { if (syncing) return; while (layout.Slots.Count < count.Value) layout.Slots.Add(DefaultSlot(layout, layout.Slots.Count)); while (layout.Slots.Count > count.Value) layout.Slots.RemoveAt(layout.Slots.Count - 1); BindSlots(Math.Min(canvas.Selected, layout.Slots.Count - 1)); SaveSoon(); };
+        count.ValueChanged += (_, _) => { if (syncing) return; while (layout.Slots.Count < count.Value) layout.Slots.Add(DefaultSlot(layout.Slots.Count)); while (layout.Slots.Count > count.Value) layout.Slots.RemoveAt(layout.Slots.Count - 1); BindSlots(Math.Min(canvas.Selected, layout.Slots.Count - 1)); SaveSoon(); };
         // Typed numbers commit when you click elsewhere or switch apps, not only on Enter.
         canvas.MouseDown += (_, _) => CommitTypedNumbers(); slots.MouseDown += (_, _) => CommitTypedNumbers(); Deactivate += (_, _) => CommitTypedNumbers();
         slots.SelectedIndexChanged += (_, _) => { if (!syncing && slots.SelectedIndex >= 0) { canvas.Selected = slots.SelectedIndex; UpdateSlotDetails(); canvas.Invalidate(); } };
@@ -123,7 +126,8 @@ public sealed partial class MainForm
         };
         canvas.ClientContextRequested += location => clientContext.Show(canvas, location);
         slots.DoubleClick += async (_, _) => await ConfigureClientLogin(); edit.Click += async (_, _) => await ConfigureClientLogin();
-        canvas.SelectionChanged += () => { slots.SelectedIndex = canvas.Selected; UpdateSlotDetails(); };
+        // Changing the list selection updates the details itself; only an unchanged selection needs it here.
+        canvas.SelectionChanged += () => { if (slots.SelectedIndex != canvas.Selected) slots.SelectedIndex = canvas.Selected; else UpdateSlotDetails(); };
         canvas.LayoutEdited += () => { UpdateSlotDetails(); UpdateApplyButton(); SaveSoon(); };
         windowMode.SelectedIndexChanged += (_, _) =>
         {
@@ -274,6 +278,7 @@ public sealed partial class MainForm
     }
     private void SetStatus(string text)
     {
+        if (status.Text == text) return; // called on every refresh; unchanged text needs no relayout
         status.Text = text; sidebar.RowStyles[4].Height = text.Length == 0 ? 0 : 44;
     }
     // While clients launch, everything except the progress text and Cancel is locked.
@@ -303,11 +308,14 @@ public sealed partial class MainForm
         using var dialog = new Form { Text = "Hover focus settings", ClientSize = new(520, 310), StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedDialog, MinimizeBox = false, MaximizeBox = false, BackColor = Surface, ForeColor = Ink, Font = Font };
         var body = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new(20), FlowDirection = FlowDirection.TopDown, WrapContents = false };
         body.Controls.Add(new Label { Text = "Focus follows the mouse over your configured WoW clients.\nUse the main toggle or your shortcut to turn it on and off.", Width = 475, Height = 55 });
-        var timing = new FlowLayoutPanel { Width = 475, Height = 40 }; timing.Controls.Add(Label("Delay (milliseconds)")); var delayBox = new FieldBox(delay, 100); timing.Controls.Add(delayBox); body.Controls.Add(timing);
-        var shortcut = new FlowLayoutPanel { Width = 475, Height = 40 }; shortcut.Controls.Add(Label("Toggle shortcut")); hotkey.Width = 210; shortcut.Controls.Add(hotkey); body.Controls.Add(shortcut);
+        var delay = Number(0, 5000); delay.Value = Math.Clamp(settings.DelayMs, 0, 5000);
+        delay.ValueChanged += (_, _) => { settings.DelayMs = (int)delay.Value; hover?.SetDelay(settings.DelayMs); SaveSoon(); };
+        var timing = new FlowLayoutPanel { Width = 475, Height = 40 }; timing.Controls.Add(Label("Delay (milliseconds)")); timing.Controls.Add(new FieldBox(delay, 100)); body.Controls.Add(timing);
+        var hotkey = Button(HotkeyText()); hotkey.Width = 210; hotkey.Click += (_, _) => { ChooseHotkey(); hotkey.Text = HotkeyText(); };
+        var shortcut = new FlowLayoutPanel { Width = 475, Height = 40 }; shortcut.Controls.Add(Label("Toggle shortcut")); shortcut.Controls.Add(hotkey); body.Controls.Add(shortcut);
         body.Controls.Add(new Label { Text = "Changes save immediately. Your previous Windows hover settings return when HoverDeck exits.", Width = 475, Height = 42, ForeColor = Muted, Font = new("Segoe UI", 9) });
         var done = Button("Done"); done.DialogResult = DialogResult.OK; body.Controls.Add(done); dialog.Controls.Add(body); Theme(dialog);
-        dialog.ShowDialog(this); delay.Parent?.Controls.Remove(delay); shortcut.Controls.Remove(hotkey); // delay and hotkey are reused by the next dialog
+        dialog.ShowDialog(this);
     }
     private void EditDirectDefaults()
     {

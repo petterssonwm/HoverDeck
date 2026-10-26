@@ -41,11 +41,16 @@ public sealed class Launcher
         var assigned = Assign(layout, Scan(layout));
         var initial = assigned.Count;
         int launched = 0;
-        foreach (var slot in layout.Slots)
+        // Open clients are placed first, so a stuck launch cannot hold them up. A launch still pending from an
+        // earlier attempt comes next, so its window, once open, is not mistaken for an untracked client by a
+        // new launch. Otherwise the layout's order is kept.
+        var open = assigned.Keys.ToHashSet();
+        foreach (var slot in layout.Slots.OrderBy(s => open.Contains(s.Id) ? 0 : s.BattleNet is { PendingSinceUtc.Length: > 0 } ? 1 : 2))
         {
             token.ThrowIfCancellationRequested();
             // Reconcile again so a client opened by the user during launch is reused.
-            assigned = Assign(layout, Scan(layout));
+            var windows = Scan(layout);
+            assigned = Assign(layout, windows);
             if (!assigned.TryGetValue(slot.Id, out var window))
             {
                 if (!launchMissing) { log($"{slot.Name}: no matching open client."); continue; }
@@ -54,7 +59,7 @@ public sealed class Launcher
                     // Battle.net logs a starting game in with the account selected at that moment, so the
                     // next client's account is chosen only after this window has opened and settled.
                     bool fresh = string.IsNullOrEmpty(slot.BattleNet!.PendingSinceUtc);
-                    window = await OpenBattleNet(slot, layout, log, token, saveBindings);
+                    window = await OpenBattleNet(slot, layout, windows, log, token, saveBindings);
                     if (fresh) launched++;
                     newClients.Add(new(slot.Id, window.Identity));
                     await Task.Delay(1200, token);
@@ -62,7 +67,7 @@ public sealed class Launcher
                 else
                 {
                 var path = Path.GetFullPath(slot.PathFor(layout));
-                var before = Scan(layout).Select(w => w.Identity).ToHashSet();
+                var before = windows.Select(w => w.Identity).ToHashSet();
                 if (!pending.TryGetValue(slot.Id, out var process) || HasExited(process))
                 {
                     process?.Dispose();
@@ -121,12 +126,12 @@ public sealed class Launcher
         log($"Ready · reused {initial}, opened {launched}, matched {assigned.Count}/{layout.Slots.Count}." + (mismatched > 0 ? $" {mismatched} client(s) did not accept the exact size; use windowed mode and Apply positions." : ""));
         return newClients;
     }
-    private async Task<GameWindow> OpenBattleNet(Slot slot, Layout layout, Action<string> log, CancellationToken token, Action? saveBindings)
+    private async Task<GameWindow> OpenBattleNet(Slot slot, Layout layout, List<GameWindow> windows, Action<string> log, CancellationToken token, Action? saveBindings)
     {
         var profile = slot.BattleNet!; string path = slot.PathFor(layout);
         if (string.IsNullOrEmpty(profile.PendingSinceUtc))
         {
-            var windows = Scan(layout); var assigned = Assign(layout, windows);
+            var assigned = Assign(layout, windows);
             var known = assigned.Values.Select(w => w.Identity).ToHashSet();
             if (windows.Any(w => Matching.SamePath(w.Executable, path) && !known.Contains(w.Identity)))
                 throw new InvalidOperationException($"{slot.Name}: an open WoW client is not tracked by HoverDeck. Close that client, then use Start clients to launch the selected account.");
@@ -142,7 +147,12 @@ public sealed class Launcher
             profile.PendingSinceUtc = DateTimeOffset.UtcNow.ToString("O"); profile.BoundIdentity = ""; saveBindings?.Invoke();
             // Save before Play. An uncertain outcome remains pending so a retry
             // waits instead of sending a second launch request.
-            await battleNet.Play(profile, resolved, token);
+            try { await battleNet.Play(profile, resolved, token); }
+            catch (PlayNotSentException ex)
+            {
+                profile.ClearBinding(); saveBindings?.Invoke();
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(ex.InnerException!);
+            }
             log($"{slot.Name}: Play sent for {resolved}. Waiting for its game window…");
         }
         else log($"{slot.Name}: waiting for its pending Battle.net launch; Play will not be repeated.");

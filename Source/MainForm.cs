@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 
 namespace HoverDeck;
@@ -15,23 +14,14 @@ public sealed partial class MainForm : Form
     private readonly bool preview;
     private readonly LayoutCanvas canvas = new() { Dock = DockStyle.Fill };
     private readonly DarkComboBox profiles = new() { Dock = DockStyle.Fill };
-
-
     private readonly NumericUpDown count = Number(1, 32);
     private readonly ListBox slots = new() { Dock = DockStyle.Fill, IntegralHeight = false, BorderStyle = BorderStyle.None };
     private readonly PillToggle toggle = new() { Text = "Hover focus off" };
-    private readonly NumericUpDown delay = Number(0, 5000);
-    private readonly Button hotkey = Button("Ctrl + Alt + H");
-
-
-
-
     private readonly Label launchSummary = new();
     private readonly NumericUpDown posX = Number(-64000, 64000), posY = Number(-64000, 64000), sizeW = Number(160, 32000), sizeH = Number(120, 32000);
     private readonly DarkComboBox targetMonitor = new() { Name = "TargetMonitor", Width = 125 };
     private readonly DarkComboBox windowMode = new() { Name = "ClientWindowMode", Width = 235 };
     private readonly NumericUpDown layer = Number(1, 9);
-    private readonly Label windowModeHint = new() { AutoSize = true, ForeColor = Muted, Margin = new(12, 6, 0, 0) };
     private const int ClientDetailsHeight = 132;
     private readonly Label status = new() { AutoSize = false, ForeColor = Muted, Font = new("Segoe UI", 9) };
     private readonly Label openCount = new() { AutoSize = true, ForeColor = Muted };
@@ -43,7 +33,8 @@ public sealed partial class MainForm : Form
     private NotifyIcon tray = null!;
     private TableLayoutPanel mainArea = null!;
     private CancellationTokenSource? launchCancellation;
-    private bool syncing, busy, hoverOn, hotkeyRegistered, closing;
+    private bool syncing, busy, hotkeyRegistered, closing;
+    private FormWindowState restoreState = FormWindowState.Normal;
     private string? lastHoverError;
     private string? lastCoverageError;
     private bool displaysReady, displayRefreshQueued;
@@ -60,7 +51,7 @@ public sealed partial class MainForm : Form
             var open = Native.Windows(discover: true).OrderBy(w => w.Bounds.X).ThenBy(w => w.Bounds.Y).ToList();
             var initial = new Layout { Name = open.Count > 0 ? "Current WoW setup" : "My WoW layout", Executable = open.FirstOrDefault()?.Executable ?? "" };
             foreach (var w in open.Take(32)) { var s = new Slot { Name = $"Client {initial.Slots.Count + 1}", Executable = Matching.SamePath(w.Executable, initial.Executable) ? "" : w.Executable }; s.SetBounds(w.Bounds); initial.Slots.Add(s); launcher.Bindings[s.Id] = w.Identity; }
-            if (initial.Slots.Count == 0) initial.Slots.Add(DefaultSlot(initial, 0));
+            if (initial.Slots.Count == 0) initial.Slots.Add(DefaultSlot(0));
             settings.Layouts.Add(initial); settings.ActiveLayout = initial.Name;
         }
         layout = settings.Layouts.FirstOrDefault(l => l.Name == settings.ActiveLayout) ?? settings.Layouts[0];
@@ -102,7 +93,7 @@ public sealed partial class MainForm : Form
             Theme(c);
         }
     }
-    private Slot DefaultSlot(Layout current, int index)
+    private Slot DefaultSlot(int index)
     {
         var screen = monitors.FirstOrDefault(m => m.Primary) ?? monitors.First();
         var r = screen.WorkArea; var s = new Slot { Name = $"Client {index + 1}" };
@@ -152,7 +143,6 @@ public sealed partial class MainForm : Form
         if (CurrentSlot is not { } s) return;
         syncing = true; selectedClientTitle.Text = s.Name; selectedTile.Invalidate();
         windowMode.SelectedIndex = (int)s.WindowMode; layer.Value = Math.Clamp(s.Layer, 1, 9);
-        windowModeHint.Text = s.WindowMode == ClientWindowMode.FullscreenWindowed ? "Covers the taskbar while using WoW" : "Leaves room for the taskbar";
         posX.Value = Math.Clamp(s.X, -64000, 64000); posY.Value = Math.Clamp(s.Y, -64000, 64000);
         sizeW.Value = Math.Clamp(s.Width, 160, 32000); sizeH.Value = Math.Clamp(s.Height, 120, 32000);
         launchSummary.Text = (s.LaunchMethod == ClientLaunchMethod.BattleNet ? "Battle.net · " + (s.BattleNet?.AccountLabel ?? "Choose an account") : "Direct / private server").ToUpperInvariant();
@@ -173,12 +163,12 @@ public sealed partial class MainForm : Form
     }
     private void SaveAs(bool blank)
     {
-        var name = Prompt("Layout name", blank ? "New WoW layout" : layout.Name + " copy");
-        if (string.IsNullOrWhiteSpace(name)) return;
+        var name = Prompt("Layout name", blank ? "New WoW layout" : layout.Name + " copy")?.Trim();
+        if (string.IsNullOrEmpty(name)) return;
         if (settings.Layouts.Any(l => l.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) { ThemedMessageBox.Show(this, "A layout with that name already exists. Choose a different name.", "Layout name"); return; }
         var next = blank ? new Layout { Executable = layout.Executable } : JsonSerializer.Deserialize<Layout>(JsonSerializer.Serialize(layout))!;
-        next.Name = name.Trim(); foreach (var slot in next.Slots) { slot.Id = Guid.NewGuid().ToString("N"); slot.BattleNet?.ClearBinding(); }
-        if (next.Slots.Count == 0) next.Slots.Add(DefaultSlot(next, 0));
+        next.Name = name; foreach (var slot in next.Slots) { slot.Id = Guid.NewGuid().ToString("N"); slot.BattleNet?.ClearBinding(); }
+        if (next.Slots.Count == 0) next.Slots.Add(DefaultSlot(0));
         settings.Layouts.Add(next); layout = next; settings.ActiveLayout = name; BindProfiles(); BindLayout(); SaveNow();
     }
     private string? Prompt(string title, string value)
@@ -204,7 +194,7 @@ public sealed partial class MainForm : Form
         try
         {
             var windows = Native.Windows(settings.Layouts.SelectMany(l => l.Slots.Select(s => s.PathFor(l)))); hover?.UpdateWindows(windows);
-            canvas.Assigned = launcher.Assign(layout, windows); canvas.Invalidate();
+            canvas.Assigned = launcher.Assign(layout, windows);
             var reserved = monitors.SelectMany(DesktopGeometry.ReservedAreas).Select(a => a.Bounds).ToArray();
             var fullscreen = layout.Slots.Where(s => s.WindowMode == ClientWindowMode.FullscreenWindowed && canvas.Assigned.ContainsKey(s.Id))
                 .Select(s => canvas.Assigned[s.Id]).Where(w => !w.Minimized && reserved.Any(a => a.IntersectsWith(w.Bounds)));
@@ -212,16 +202,19 @@ public sealed partial class MainForm : Form
             var fullMonitor = canvas.Assigned.Values.Where(w => monitors.Any(m => m.Bounds == w.Bounds)).Select(w => w.Handle).ToHashSet();
             hover?.UpdateCoverage(canvas.Assigned.Values, fullscreen, layers, fullMonitor);
             openCount.Text = $"{canvas.Assigned.Count} of {layout.Slots.Count} clients open";
-            int signature = layout.Slots.Aggregate(17, (h, s) => h * 31 + (canvas.Assigned.ContainsKey(s.Id) ? 1 : 0));
-            if (signature != openSignature) { openSignature = signature; slots.Invalidate(); }
-            if (!busy && !displayApplying && !arrangeDisplays.Checked) SetStatus("");
+            // Repaint the map and the cards only when an open client appeared, closed, moved or was minimized.
+            var signature = new HashCode();
+            foreach (var s in layout.Slots) if (canvas.Assigned.TryGetValue(s.Id, out var w)) { signature.Add(s.Id); signature.Add(w.Handle); signature.Add(w.Bounds); signature.Add(w.Minimized); }
+            if (signature.ToHashCode() is var current && current != openSignature) { openSignature = current; slots.Invalidate(); canvas.Invalidate(); }
             UpdateApplyButton();
             if (hover?.Error is { } err && lastHoverError != err) { lastHoverError = err; Log("Hover focus error: " + err); toggle.Checked = false; }
+            string coverageStatus = "";
             if (hover?.CoverageError is { } coverageError)
             {
                 if (lastCoverageError != coverageError) { lastCoverageError = coverageError; Log("Taskbar coverage: " + coverageError); }
-                SetStatus("Taskbar coverage failed · see View → Activity log");
+                coverageStatus = "Taskbar coverage failed · see Settings → Activity log";
             }
+            if (!busy && !displayApplying && !arrangeDisplays.Checked) SetStatus(coverageStatus);
         }
         catch (Exception ex) { Log("Refresh failed: " + ex.Message); }
     }
@@ -268,6 +261,7 @@ public sealed partial class MainForm : Form
         };
         dialog.ShowDialog(this);
     }
+    private string HotkeyText() => ((settings.HotkeyModifiers & 2) != 0 ? "Ctrl + " : "") + ((settings.HotkeyModifiers & 1) != 0 ? "Alt + " : "") + ((settings.HotkeyModifiers & 4) != 0 ? "Shift + " : "") + (Keys)settings.HotkeyKey;
     private bool RegisterShortcut(uint modifiers, int key)
     {
         if (preview) return true;
@@ -276,11 +270,7 @@ public sealed partial class MainForm : Form
         hotkeyRegistered = Native.RegisterHotKey(Handle, 1, settings.HotkeyModifiers | 0x4000, (uint)settings.HotkeyKey);
         Log("The global hotkey is in use. Choose another in Settings → Hover focus."); return false;
     }
-    private void UpdateHotkeyLabel()
-    {
-        hotkey.Text = ((settings.HotkeyModifiers & 2) != 0 ? "Ctrl + " : "") + ((settings.HotkeyModifiers & 1) != 0 ? "Alt + " : "") + ((settings.HotkeyModifiers & 4) != 0 ? "Shift + " : "") + (Keys)settings.HotkeyKey;
-        hints.SetToolTip(toggle, "Focus follows the mouse over your WoW clients. Shortcut: " + hotkey.Text);
-    }
+    private void UpdateHotkeyLabel() => hints.SetToolTip(toggle, "Focus follows the mouse over your WoW clients. Shortcut: " + HotkeyText());
     protected override void WndProc(ref Message m)
     {
         if (HandleFrameMessage(ref m)) return;
@@ -293,12 +283,12 @@ public sealed partial class MainForm : Form
             BeginInvoke((Action)(() => { displayRefreshQueued = false; RefreshDisplayGeometry(); }));
         }
     }
-    private void RestoreWindow() { Show(); WindowState = FormWindowState.Normal; Activate(); }
+    private void RestoreWindow() { Show(); WindowState = restoreState; Activate(); }
     private void SaveSoon() { saveTimer.Stop(); saveTimer.Start(); }
     private void SaveNow()
     {
         if (preview) return;
-        try { Storage.Write(Storage.SettingsPath, settings); }
+        try { Storage.Write(Storage.SettingsPath, settings, backup: true); }
         catch (Exception ex) { Log("Could not save settings: " + ex.Message); }
     }
     private void Log(string message) { logBox.AppendText($"{DateTime.Now:HH:mm:ss}  {message}{Environment.NewLine}"); logBox.SelectionStart = logBox.TextLength; logBox.ScrollToCaret(); }

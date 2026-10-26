@@ -10,14 +10,13 @@ internal sealed class ClientLoginForm : Form
     private readonly NumericUpDown delay = new() { Minimum = 0, Maximum = 120, Width = 85 };
     private readonly Label screenStatus = new() { AutoSize = false, Height = 46, Dock = DockStyle.Fill };
     private readonly string executable;
-    private readonly GameWindow? window;
     private LoginScreen? screen;
     public ClientLogin? Result { get; private set; }
     public bool LoginNow { get; private set; }
     public ClientLoginForm(Slot slot, Layout layout, GameWindow? window) : this(slot, layout, window, slot.Login) { }
     public ClientLoginForm(Slot slot, Layout layout, GameWindow? window, ClientLogin? draft)
     {
-        this.window = window; executable = slot.PathFor(layout); screen = draft?.Screen;
+        executable = slot.PathFor(layout); screen = draft?.Screen;
         Text = slot.Name + " — Login"; ClientSize = new(610, 600); MinimumSize = Size; FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent; MaximizeBox = MinimizeBox = false;
         Font = new("Segoe UI", 10); BackColor = AppTheme.Surface; ForeColor = AppTheme.Ink; DialogFrame.Apply(this);

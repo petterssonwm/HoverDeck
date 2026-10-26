@@ -10,7 +10,6 @@ internal static class Native
     [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; public POINT(int x, int y) { X = x; Y = y; } }
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; public Rectangle Rectangle => Rectangle.FromLTRB(Left, Top, Right, Bottom); }
     [StructLayout(LayoutKind.Sequential)] public struct WINDOWPLACEMENT { public int Length, Flags, ShowCmd; public POINT Min, Max; public RECT Normal; }
-    [StructLayout(LayoutKind.Sequential)] public struct MOUSEHOOK { public POINT Point; public uint MouseData, Flags, Time; public nuint Extra; }
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct MONITORINFOEX
     {
@@ -44,7 +43,7 @@ internal static class Native
     [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int key);
     [DllImport("user32.dll")] public static extern nint GetForegroundWindow();
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] private static extern int GetWindowLong(nint h, int index);
-    [DllImport("user32.dll", EntryPoint = "GetClassNameW", CharSet = CharSet.Unicode)] private static extern int GetClassName(nint h, StringBuilder text, int length);
+    [DllImport("user32.dll", EntryPoint = "FindWindowExW", CharSet = CharSet.Unicode)] private static extern nint FindWindowEx(nint parent, nint after, string className, string? title);
     [DllImport("user32.dll", SetLastError = true)] public static extern bool SetWindowPos(nint h, nint after, int x, int y, int width, int height, uint flags);
     [DllImport("user32.dll")] public static extern bool ShowWindowAsync(nint h, int command);
     [DllImport("user32.dll")] public static extern bool PostMessage(nint h, int message, nint wParam, nint lParam);
@@ -63,7 +62,16 @@ internal static class Native
     {
         var handle = OpenProcess(0x1000, false, pid);
         if (handle == 0) return "";
-        try { var b = new StringBuilder(32768); int size = b.Capacity; return QueryFullProcessImageName(handle, 0, b, ref size) ? b.ToString() : ""; }
+        try
+        {
+            // Almost every path fits in 1024 characters; retry with the maximum only when it does not.
+            for (int capacity = 1024; ; capacity = 32768)
+            {
+                var b = new StringBuilder(capacity); int size = b.Capacity;
+                if (QueryFullProcessImageName(handle, 0, b, ref size)) return b.ToString();
+                if (capacity == 32768 || Marshal.GetLastWin32Error() != 122) return ""; // ERROR_INSUFFICIENT_BUFFER
+            }
+        }
         finally { CloseHandle(handle); }
     }
     public static List<MonitorInfo> Monitors()
@@ -86,16 +94,20 @@ internal static class Native
     public static List<GameWindow> Windows(IEnumerable<string>? paths = null, bool discover = false)
     {
         var allowed = (paths ?? Array.Empty<string>()).Where(p => !string.IsNullOrWhiteSpace(p)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var found = new List<GameWindow>();
+        var found = new List<GameWindow>(); var pathOf = new Dictionary<uint, string>();
         EnumWindows((h, _) =>
         {
             if (!IsWindowVisible(h) || GetWindow(h, 4) != 0) return true;
-            var title = new StringBuilder(512); GetWindowText(h, title, title.Capacity);
             GetWindowThreadProcessId(h, out var pid);
-            var path = ProcessPath(pid);
-            bool looksLikeWow = title.ToString().Contains("World of Warcraft", StringComparison.OrdinalIgnoreCase) || System.IO.Path.GetFileNameWithoutExtension(path).Equals("Wow", StringComparison.OrdinalIgnoreCase) || System.IO.Path.GetFileNameWithoutExtension(path).Equals("WowB", StringComparison.OrdinalIgnoreCase);
-            if (!allowed.Contains(path) && !(discover && looksLikeWow)) return true;
-            if (path.Length == 0 || !GetWindowRect(h, out var r)) return true;
+            if (!pathOf.TryGetValue(pid, out var path)) pathOf[pid] = path = ProcessPath(pid); // one lookup per process, not per window
+            if (path.Length == 0 || (!discover && !allowed.Contains(path))) return true;
+            var title = new StringBuilder(512); GetWindowText(h, title, title.Capacity);
+            if (!allowed.Contains(path))
+            {
+                var name = System.IO.Path.GetFileNameWithoutExtension(path);
+                if (!title.ToString().Contains("World of Warcraft", StringComparison.OrdinalIgnoreCase) && !name.Equals("Wow", StringComparison.OrdinalIgnoreCase) && !name.Equals("WowB", StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            if (!GetWindowRect(h, out var r)) return true;
             var bounds = r.Rectangle;
             bool minimized = IsIconic(h);
             if (!minimized && TryVisibleBounds(h, bounds, out var visible)) bounds = visible;
@@ -134,9 +146,21 @@ internal static class Native
         if (started == 0 || !IsWindow((nint)handle)) return false;
         GetWindowThreadProcessId((nint)handle, out var pid);
         if (pid != processId) return false;
-        try { using var process = Process.GetProcessById(processId); return process.StartTime.ToUniversalTime().Ticks == started && !process.HasExited; }
-        catch { return false; }
+        // A live window still owned by the same process ID proves that process is alive; its start
+        // time is re-read at most every two seconds, which bounds any ID reuse to that window.
+        var key = (handle, processId, started); long now = Environment.TickCount64;
+        lock (verified) if (verified.TryGetValue(key, out var at) && now - at < 2000) return true;
+        bool same;
+        try { using var process = Process.GetProcessById(processId); same = process.StartTime.ToUniversalTime().Ticks == started && !process.HasExited; }
+        catch { same = false; }
+        lock (verified)
+        {
+            if (verified.Count > 256) verified.Clear();
+            if (same) verified[key] = now; else verified.Remove(key);
+        }
+        return same;
     }
+    private static readonly Dictionary<(long, int, long), long> verified = new();
     public static bool IsTopmost(nint handle) => (GetWindowLong(handle, -20) & 0x00000008) != 0;
     public static void SetTopmost(nint handle, bool value)
     {
@@ -144,21 +168,21 @@ internal static class Native
         if (!SetWindowPos(handle, value ? -1 : -2, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 | 0x0200 | 0x4000))
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Windows could not update this client's taskbar coverage. Check whether WoW is running as administrator.");
     }
+    // Runs several times a second while playing: find the few taskbars first, then walk only the windows above the game.
     public static bool TaskbarAbove(nint handle)
     {
         if (!GetWindowRect(handle, out var game)) return false;
-        bool above = false;
-        EnumWindows((h, _) =>
-        {
-            if (h == handle) return false;
-            if (!IsWindowVisible(h)) return true;
-            var name = new StringBuilder(128); GetClassName(h, name, name.Capacity);
-            if ((name.ToString() == "Shell_TrayWnd" || name.ToString() == "Shell_SecondaryTrayWnd") && GetWindowRect(h, out var bar) && bar.Rectangle.IntersectsWith(game.Rectangle))
-            { above = true; return false; }
-            return true;
-        }, 0);
-        return above;
+        var bars = new List<nint>(2);
+        foreach (var name in TaskbarClasses)
+            for (nint bar = FindWindowEx(0, 0, name, null); bar != 0; bar = FindWindowEx(0, bar, name, null))
+                if (IsWindowVisible(bar) && GetWindowRect(bar, out var r) && r.Rectangle.IntersectsWith(game.Rectangle)) bars.Add(bar);
+        if (bars.Count == 0) return false;
+        int guard = 0; // the z-order can change during the walk
+        for (nint h = GetWindow(handle, 3); h != 0 && guard++ < 10000; h = GetWindow(h, 3)) // GW_HWNDPREV
+            if (bars.Contains(h)) return true;
+        return false;
     }
+    private static readonly string[] TaskbarClasses = { "Shell_TrayWnd", "Shell_SecondaryTrayWnd" };
     private static bool TryVisibleBounds(nint handle, Rectangle outer, out Rectangle visible)
     {
         visible = outer;

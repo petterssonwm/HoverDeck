@@ -63,15 +63,17 @@ internal static class LoginInput
         yield return new() { Data = new() { Mouse = new() { Flags = 2 } } };
         yield return new() { Data = new() { Mouse = new() { Flags = 4 } } };
     }
+    // Built as one array, so the only copy of the typed characters is the one Send clears afterwards.
     internal static Input[] TextEvents(string text)
     {
-        var result = new List<Input> { Key(0x11), Key(0x41), Key(0x41, true), Key(0x11, true), Key(0x08), Key(0x08, true) };
-        foreach (char c in text)
+        var result = new Input[6 + 2 * text.Length];
+        new[] { Key(0x11), Key(0x41), Key(0x41, true), Key(0x11, true), Key(0x08), Key(0x08, true) }.CopyTo(result, 0);
+        for (int i = 0; i < text.Length; i++)
         {
-            result.Add(new() { Type = 1, Data = new() { Keyboard = new() { Scan = c, Flags = 4 } } });
-            result.Add(new() { Type = 1, Data = new() { Keyboard = new() { Scan = c, Flags = 6 } } });
+            result[6 + 2 * i] = new() { Type = 1, Data = new() { Keyboard = new() { Scan = text[i], Flags = 4 } } };
+            result[7 + 2 * i] = new() { Type = 1, Data = new() { Keyboard = new() { Scan = text[i], Flags = 6 } } };
         }
-        return result.ToArray();
+        return result;
     }
     private static void Send(GameWindow window, Input[] events, CancellationToken token)
     {
@@ -122,24 +124,20 @@ internal static class ClientLoginService
         }
         if (!matches) throw new InvalidOperationException("The saved login-screen marker was not found. Login was skipped; open the login screen or set it up again.");
         var credentials = CredentialProtection.Unprotect(login.ProtectedCredentials);
-        try
+        await LoginInput.Fill(window, setup.Account, credentials.Account, token);
+        if (setup.KeyboardNavigation) await LoginInput.TabToPassword(window, token);
+        using (var verify = LoginInput.Capture(window, token))
+            if (!LoginScreenMatch.Matches(verify, setup)) throw new InvalidOperationException("The login screen changed. Password entry was stopped.");
+        if (setup.KeyboardNavigation)
         {
-            await LoginInput.Fill(window, setup.Account, credentials.Account, token);
-            if (setup.KeyboardNavigation) await LoginInput.TabToPassword(window, token);
-            using (var verify = LoginInput.Capture(window, token))
-                if (!LoginScreenMatch.Matches(verify, setup)) throw new InvalidOperationException("The login screen changed. Password entry was stopped.");
-            if (setup.KeyboardNavigation)
-            {
-                await LoginInput.FillFocused(window, credentials.Password, token);
-                LoginInput.SubmitWithEnter(window, token);
-            }
-            else
-            {
-                await LoginInput.Fill(window, setup.Password, credentials.Password, token);
-                LoginInput.Submit(window, setup.Submit, token);
-            }
-            log($"{slot.Name}: login submitted. Complete any server prompts or character selection in the client.");
+            await LoginInput.FillFocused(window, credentials.Password, token);
+            LoginInput.SubmitWithEnter(window, token);
         }
-        finally { credentials = new("", ""); }
+        else
+        {
+            await LoginInput.Fill(window, setup.Password, credentials.Password, token);
+            LoginInput.Submit(window, setup.Submit, token);
+        }
+        log($"{slot.Name}: login submitted. Complete any server prompts or character selection in the client.");
     }
 }

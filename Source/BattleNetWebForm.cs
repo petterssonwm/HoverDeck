@@ -10,7 +10,6 @@ internal sealed class BattleNetWebForm : Form
     private readonly WebView2 browser = new() { Dock = DockStyle.Fill, Visible = false };
     private readonly Label status = new() { Dock = DockStyle.Fill, Padding = new(10, 4, 10, 4) };
     private readonly Label notice = new() { Name = "ImportNotice", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new("Segoe UI", 12), Text = "Opening Blizzard sign-in…" };
-    private readonly BattleNetConnection connection;
     private readonly bool interactive;
     private readonly TaskCompletionSource<BattleNetAccountData.ImportResult> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private BattleNetAccountData.ImportResult? result;
@@ -22,7 +21,7 @@ internal sealed class BattleNetWebForm : Form
     internal Task<BattleNetAccountData.ImportResult> Completion => completion.Task;
     internal BattleNetWebForm(BattleNetConnection connection, bool interactive, string? testProfileDirectory = null, Action<CoreWebView2Environment, CoreWebView2>? testSetup = null)
     {
-        this.connection = connection; this.interactive = interactive;
+        this.interactive = interactive;
         Text = "Connect Battle.net — " + connection.Name; Size = new(950, 780); StartPosition = FormStartPosition.CenterParent;
         Font = new("Segoe UI", 10); ShowInTaskbar = interactive; if (!interactive) Opacity = 0;
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };

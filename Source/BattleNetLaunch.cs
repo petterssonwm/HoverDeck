@@ -23,8 +23,6 @@ public sealed class BattleNetLaunch
         && (ConnectionId.Length == 0 || (WebAccountId.Length > 0 && AccountName.Length > 0));
     public string AccountKey => ConnectionId.Length > 0 ? ConnectionId + "/" + WebAccountId : AccountName.Length > 0 ? AccountName.ToUpperInvariant() : $"WOW{AccountNumber}/{Region.ToUpperInvariant()}";
     public string AccountLabel => AccountName.Length > 0 ? AccountName : AccountNumber is >= 1 and <= 9 ? $"WoW{AccountNumber}" + (Region == "Auto" ? " (automatic region)" : $" ({Region})") : "Choose an account";
-    public bool SameTarget(BattleNetLaunch? other) => other is not null && GameTabId == other.GameTabId
-        && GameVersion == other.GameVersion && AccountKey == other.AccountKey && Matching.SamePath(Executable, other.Executable);
     public void ClearBinding() { BoundIdentity = ""; PendingSinceUtc = ""; BeforeLaunch.Clear(); ResolvedAccount = ""; }
     public void ClearAccountSelection() { WebAccountId = ""; AccountName = ""; AccountNumber = 0; Region = "Auto"; ClearBinding(); }
 }
@@ -78,11 +76,10 @@ internal static class BattleNetInstallation
         }
         return result.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
-    public static string SuggestExecutable(string version)
-    {
-        var paths = GameExecutables();
-        string folder = version switch { "World of Warcraft Classic" => "_classic_era_", "Mists of Pandaria Classic" => "_classic_", "Burning Crusade Anniversary" => "_anniversary_", "WoW: Forever" => "_forever_", "World of Warcraft" => "_retail_", _ => "" };
-        return folder.Length == 0 ? "" : paths.FirstOrDefault(p => p.Contains(folder, StringComparison.OrdinalIgnoreCase)) ?? "";
-    }
+    // The Battle.net tab that lists a WoW version; the product code helps when the version name is not decisive.
+    public static string TabForVersion(string version, string product = "") =>
+        version.Contains("Forever", StringComparison.OrdinalIgnoreCase) || product.StartsWith("wowf", StringComparison.OrdinalIgnoreCase) ? "game-nav-btn-WoWF"
+        : product.Contains("classic", StringComparison.OrdinalIgnoreCase) || product.Contains("anniversary", StringComparison.OrdinalIgnoreCase)
+            || version.Contains("Classic", StringComparison.OrdinalIgnoreCase) || version.Contains("Anniversary", StringComparison.OrdinalIgnoreCase) ? "game-nav-btn-WoWC" : "game-nav-btn-WoW";
 }
 

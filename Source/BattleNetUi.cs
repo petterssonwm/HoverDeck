@@ -13,7 +13,8 @@ internal sealed class BattleNetUi
     [DllImport("user32.dll", EntryPoint = "SetWindowLongW")] private static extern int SetWindowLong(nint window, int index, int value);
     [DllImport("user32.dll")] private static extern bool SetLayeredWindowAttributes(nint window, uint key, byte alpha, uint flags);
     private const string SignInNotice = "Battle.net isn't signed in. Sign in to Battle.net, then press Start clients again.";
-    private static readonly string[] WoWTabs = { "World of Warcraft", "World of Warcraft Classic", "WoW: Forever" };
+    private static readonly Dictionary<string, string> TabNames = new() { ["game-nav-btn-WoW"] = "World of Warcraft", ["game-nav-btn-WoWC"] = "World of Warcraft Classic", ["game-nav-btn-WoWF"] = "WoW: Forever" };
+    private static readonly ICollection<string> WoWTabs = TabNames.Values;
     private readonly nint handle;
     private readonly CancellationToken token;
     private Node? versionSelector, accountSelector;
@@ -26,8 +27,9 @@ internal sealed class BattleNetUi
     private sealed record Node(IAccessible Accessible, object Child)
     {
         public string Name => Accessible.get_accName(Child) ?? "";
-        public AccessibleRole Role => (AccessibleRole)Convert.ToInt32(Accessible.get_accRole(Child));
-        public int State => Convert.ToInt32(Accessible.get_accState(Child));
+        // Roles and states are integers in practice; anything else counts as "no role" instead of ending a tree walk.
+        public AccessibleRole Role => Accessible.get_accRole(Child) is int role ? (AccessibleRole)role : AccessibleRole.None;
+        public int State => Accessible.get_accState(Child) is int state ? state : 0;
     }
     public static async Task<T> Run<T>(Func<BattleNetUi, T> action, CancellationToken token, Action<string>? log = null)
     {
@@ -52,6 +54,12 @@ internal sealed class BattleNetUi
     private static void ScheduleStow(nint window)
     {
         lock (stowLock) { concealedWindow = window; stowTimer?.Dispose(); stowTimer = new System.Threading.Timer(_ => PutAwayNow(false), null, 4000, Timeout.Infinite); }
+    }
+    // Puts back a Battle.net that a HoverDeck which was killed left invisible and click-through.
+    public static void RecoverOnStartup()
+    {
+        foreach (var window in Native.Windows(LauncherPaths()).Where(w => w.Title == "Battle.net"))
+            if ((GetWindowLong(window.Handle, -20) & (Layered | ClickThrough)) == (Layered | ClickThrough)) Stow(window.Handle);
     }
     // Minimizes Battle.net and makes it visible again if HoverDeck still has it hidden; also called when HoverDeck exits.
     public static void PutAwayNow() => PutAwayNow(true);
@@ -152,10 +160,11 @@ internal sealed class BattleNetUi
                 {
                     foreach (var child in Children(parent))
                     {
-                        string name = child.Name; var role = child.Role;
-                        if ((role == AccessibleRole.ButtonMenu && name.StartsWith("Game Version ", StringComparison.Ordinal)) || (role == AccessibleRole.PageTab && WoWTabs.Contains(name))) return true;
+                        var role = child.Role; next.Add(child);
+                        if (role is not (AccessibleRole.ButtonMenu or AccessibleRole.PageTab or AccessibleRole.PushButton)) continue;
+                        string name = child.Name;
+                        if ((role == AccessibleRole.ButtonMenu && name.StartsWith(Prefix(false), StringComparison.Ordinal)) || (role == AccessibleRole.PageTab && WoWTabs.Contains(name))) return true;
                         if (role == AccessibleRole.PushButton && (name.Equals("Log In", StringComparison.OrdinalIgnoreCase) || name.Equals("Sign In", StringComparison.OrdinalIgnoreCase))) return false;
-                        next.Add(child);
                     }
                 }
                 catch (Exception ex) when (ex is COMException or ArgumentException) { }
@@ -277,21 +286,23 @@ internal sealed class BattleNetUi
         var matches = Find(role, predicate);
         return matches.Count == 1 ? matches[0] : throw new InvalidOperationException(missing);
     }
+    private static string Prefix(bool account) => account ? "Game Account, Currently Selected " : "Game Version ";
     private Node Selector(bool account)
     {
         ref Node? cached = ref (account ? ref accountSelector : ref versionSelector);
-        try { if (cached is not null && cached.Name.StartsWith(account ? "Game Account, Currently Selected " : "Game Version ", StringComparison.Ordinal)) return cached; }
+        try { if (cached is not null && cached.Name.StartsWith(Prefix(account), StringComparison.Ordinal)) return cached; }
         catch (Exception ex) when (ex is COMException or ArgumentException) { cached = null; }
-        return cached = Unique(AccessibleRole.ButtonMenu,
-            name => name.StartsWith(account ? "Game Account, Currently Selected " : "Game Version ", StringComparison.Ordinal),
+        return cached = Unique(AccessibleRole.ButtonMenu, name => name.StartsWith(Prefix(account), StringComparison.Ordinal),
             account ? "Battle.net's WoW account selector is unavailable. Sign in and select the installed WoW game first." : "Open Battle.net's World of Warcraft page. This integration currently uses the English launcher controls.");
     }
-    private string Selected(bool account) => Selector(account).Name[(account ? "Game Account, Currently Selected " : "Game Version ").Length..].Trim();
-    private void Act(Node control)
+    private string Selected(bool account) => Selector(account).Name[Prefix(account).Length..].Trim();
+    // sending runs at the last moment before the control is pressed, after every check that can still refuse.
+    private void Act(Node control, Action? sending = null)
     {
         Check();
         if ((control.State & 1) != 0) throw new InvalidOperationException("Battle.net is still busy. Wait for it to finish, then retry.");
         if (string.IsNullOrEmpty(control.Accessible.get_accDefaultAction(control.Child))) throw new InvalidOperationException("Battle.net did not expose an action for the requested control.");
+        sending?.Invoke();
         control.Accessible.accDoDefaultAction(control.Child);
     }
     private T Wait<T>(Func<T?> read, string error, int seconds = 8) where T : class
@@ -331,16 +342,15 @@ internal sealed class BattleNetUi
         if (!account) { versionSelector = null; accountSelector = null; }
         Wait(() => { try { return Selected(account) == name ? "selected" : null; } catch (Exception ex) when (ex is InvalidOperationException or COMException or ArgumentException) { return null; } }, "Battle.net did not confirm the requested selection.");
     }
-    private static string TabForVersion(string version) => version.Contains("Forever", StringComparison.OrdinalIgnoreCase) ? "game-nav-btn-WoWF" : version.Contains("Classic", StringComparison.OrdinalIgnoreCase) || version.Contains("Anniversary", StringComparison.OrdinalIgnoreCase) ? "game-nav-btn-WoWC" : "game-nav-btn-WoW";
     public BattleNetChoices ReadChoices(string? requestedVersion = null)
     {
         if (!string.IsNullOrEmpty(requestedVersion)) Select(false, requestedVersion);
         string version = Selected(false), account = Selected(true);
-        return new(TabForVersion(version), version, account, Choices(false), Choices(true));
+        return new(BattleNetInstallation.TabForVersion(version), version, account, Choices(false), Choices(true));
     }
     private void Navigate(string tabId)
     {
-        string name = tabId switch { "game-nav-btn-WoWC" => "World of Warcraft Classic", "game-nav-btn-WoWF" => "WoW: Forever", "game-nav-btn-WoW" => "World of Warcraft", _ => throw new InvalidOperationException("Choose a World of Warcraft game version.") };
+        if (!TabNames.TryGetValue(tabId, out var name)) throw new InvalidOperationException("Choose a World of Warcraft game version.");
         // Right after Battle.net wakes up its tabs are listed before they can be clicked.
         var tab = Wait(() =>
         {
@@ -354,15 +364,34 @@ internal sealed class BattleNetUi
     {
         try { Selected(false); } catch (InvalidOperationException) { Navigate(profile.GameTabId); }
         Select(false, profile.GameVersion);
-        string account = BattleNetAccounts.Resolve(profile, Choices(true)); Select(true, account);
+        string account = SelectAccount(profile);
         Verify(profile, account); return account;
+    }
+    // Reads the account list and picks the account in one opening of the menu.
+    private string SelectAccount(BattleNetLaunch profile)
+    {
+        var menu = OpenMenu(true);
+        string account; Node choice;
+        try
+        {
+            var items = Find(AccessibleRole.MenuItem, n => n.Length > 0, menu).Select(n => (Node: n, n.Name)).ToList();
+            account = BattleNetAccounts.Resolve(profile, items.Select(i => i.Name));
+            if (Selected(true) == account) { CloseMenu(true); return account; }
+            var match = items.Where(i => i.Name == account).Select(i => i.Node).ToList();
+            if (match.Count != 1) throw new InvalidOperationException($"Battle.net no longer lists '{account}'. Refresh the launch settings.");
+            choice = match[0];
+        }
+        catch { try { CloseMenu(true); } catch (Exception ex) when (ex is InvalidOperationException or COMException or ArgumentException) { } throw; }
+        Act(choice);
+        Wait(() => { try { return Selected(true) == account ? "selected" : null; } catch (Exception ex) when (ex is InvalidOperationException or COMException or ArgumentException) { return null; } }, "Battle.net did not confirm the requested selection.");
+        return account;
     }
     private void Verify(BattleNetLaunch profile, string account)
     {
         Check();
         if (Selected(false) != profile.GameVersion || Selected(true) != account) throw new InvalidOperationException("Battle.net's version/account changed during launch. No Play action was sent.");
     }
-    public bool Play(BattleNetLaunch profile, string account)
+    public void Play(BattleNetLaunch profile, string account, Action sending)
     {
         Verify(profile, account);
         // Just after starting another client Battle.net shows Play as busy for a moment.
@@ -371,7 +400,7 @@ internal sealed class BattleNetUi
             try { var found = Find(AccessibleRole.PushButton, name => name.StartsWith("Play: " + profile.GameVersion + ", Version:", StringComparison.Ordinal)); return found.Count == 1 && (found[0].State & 1) == 0 ? found[0] : null; }
             catch (Exception ex) when (ex is COMException or ArgumentException) { return null; }
         }, "Battle.net is not ready to Play this game. Finish installation/update or any launcher prompts, then retry.", 20);
-        Verify(profile, account); Act(play); return true;
+        Verify(profile, account); Act(play, sending);
     }
 }
 

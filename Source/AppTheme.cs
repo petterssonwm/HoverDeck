@@ -75,10 +75,21 @@ internal static class AppTheme
         return path;
     }
     // GDI has no letter spacing, so small uppercase captions are laid out one character at a time.
+    // Letter-spaced labels are drawn one character at a time; each character's size is measured once per font.
+    private static readonly Dictionary<(string, float, FontStyle, string), Size> measured = new();
+    private static Size Measure(string text, Font font)
+    {
+        var key = (font.Name, font.SizeInPoints, font.Style, text);
+        lock (measured)
+        {
+            if (!measured.TryGetValue(key, out var size)) measured[key] = size = TextRenderer.MeasureText(text, font, Size.Empty, TextFormatFlags.NoPadding);
+            return size;
+        }
+    }
     public static Size MeasureTracked(string text, Font font, float tracking)
     {
-        float width = 0; int height = TextRenderer.MeasureText("Ag", font, Size.Empty, TextFormatFlags.NoPadding).Height;
-        foreach (char c in text) width += TextRenderer.MeasureText(c.ToString(), font, Size.Empty, TextFormatFlags.NoPadding).Width + tracking;
+        float width = 0; int height = Measure("Ag", font).Height;
+        foreach (char c in text) width += Measure(c.ToString(), font).Width + tracking;
         return new((int)Math.Ceiling(Math.Max(0, width - tracking)), height);
     }
     public static void DrawTracked(Graphics g, string text, Font font, Color color, Rectangle bounds, float tracking, bool center = false)
@@ -88,7 +99,7 @@ internal static class AppTheme
         foreach (char c in text)
         {
             var s = c.ToString(); TextRenderer.DrawText(g, s, font, new Point((int)Math.Round(x), y), color, TextFormatFlags.NoPadding);
-            x += TextRenderer.MeasureText(s, font, Size.Empty, TextFormatFlags.NoPadding).Width + tracking;
+            x += Measure(s, font).Width + tracking;
         }
     }
     public static void DrawTile(Graphics g, Rectangle r, Color color, string text, Font font)

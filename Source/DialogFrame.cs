@@ -102,7 +102,6 @@ internal sealed class DialogTitleBar : Control
 // HoverDeck's own message box: same calls as MessageBox.Show, drawn in the app's style.
 internal static class ThemedMessageBox
 {
-    public static DialogResult Show(string text) => Show(null, text, "HoverDeck");
     public static DialogResult Show(string text, string caption, MessageBoxButtons buttons = MessageBoxButtons.OK, MessageBoxIcon icon = MessageBoxIcon.None) => Show(null, text, caption, buttons, icon);
     public static DialogResult Show(IWin32Window? owner, string text) => Show(owner, text, "HoverDeck");
     public static DialogResult Show(IWin32Window? owner, string text, string caption, MessageBoxButtons buttons = MessageBoxButtons.OK, MessageBoxIcon icon = MessageBoxIcon.None, MessageBoxDefaultButton defaultButton = MessageBoxDefaultButton.Button1)

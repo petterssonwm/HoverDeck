@@ -1,8 +1,8 @@
-HOVERDECK 1.7.5 — WoW workspace
+HOVERDECK 1.7.6 — WoW workspace
 
 Open HoverDeck.exe. Requires Windows x64, .NET 8 Windows Desktop Runtime and Microsoft Edge WebView2 Runtime.
 Downloads: https://dotnet.microsoft.com/download/dotnet/8.0 and https://developer.microsoft.com/microsoft-edge/webview2/ (Evergreen Runtime).
-Keep HoverDeck in a writable folder. Layouts and preferences live in Data\settings.json beside the executable.
+Keep HoverDeck in a writable folder. Layouts and preferences live in Data\settings.json: for an installed copy in %LOCALAPPDATA%\HoverDeck\Data, for the portable ZIP beside HoverDeck.exe. The previous save is kept as settings.json.bak and is used automatically if settings.json is damaged or missing.
 The shareable ZIP contains clean starting settings. Do not share your own Data folder or browser profiles.
 
 INSTALLING AND UPDATES

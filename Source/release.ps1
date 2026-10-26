@@ -64,9 +64,14 @@ if (-not $Draft) { $upload += '--publish' }
 if ($LASTEXITCODE) { throw "Upload failed." }
 # Friendlier download names. Updates only use releases.win.json and the .nupkg files.
 $repoPath = $feed -replace '^https://github\.com/', ''
-$release = & gh api "repos/$repoPath/releases/tags/v$Version" | ConvertFrom-Json
+# Listed through the releases API, which (unlike the tag lookup) also finds a draft.
+$release = & gh api "repos/$repoPath/releases?per_page=100" | ConvertFrom-Json | ForEach-Object { $_ } | Where-Object tag_name -eq "v$Version" | Select-Object -First 1
+if ($LASTEXITCODE -or -not $release) { throw "Release v$Version was uploaded, but GitHub did not list it; rename its download files on GitHub by hand." }
 foreach ($rename in @(@("$PackId-win-Setup.exe", 'HoverDeck-Setup.exe'), @("$PackId-win-Portable.zip", 'HoverDeck-Portable.zip'))) {
     $asset = $release.assets | Where-Object name -eq $rename[0]
-    if ($asset) { & gh api -X PATCH "repos/$repoPath/releases/assets/$($asset.id)" -f "name=$($rename[1])" | Out-Null }
+    if (-not $asset) { throw "Release v$Version has no $($rename[0]) to rename." }
+    & gh api -X PATCH "repos/$repoPath/releases/assets/$($asset.id)" -f "name=$($rename[1])" | Out-Null
+    if ($LASTEXITCODE) { throw "Could not rename $($rename[0]) on GitHub." }
 }
+if ($Draft) { Write-Host "Done. Draft release v$Version is ready; publish it on GitHub when you are."; return }
 Write-Host "Done. Share this page with people: $feed/releases/latest  (they download HoverDeck-Setup.exe)"

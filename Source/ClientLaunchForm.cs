@@ -32,7 +32,7 @@ internal sealed class ClientLaunchForm : Form
         var host = new Panel { Width = 600, Height = 280, Margin = Padding.Empty }; launch.Body.Controls.Add(host);
         var direct = Body(); var bnet = Body(); host.Controls.Add(direct); host.Controls.Add(bnet);
         var useDefault = new CheckBox { Text = "Use this layout's default executable", Checked = string.IsNullOrWhiteSpace(draft.Executable), AutoSize = true, Name = "UseLayoutExecutable", Margin = new(0, 4, 0, 10) }; direct.Controls.Add(useDefault);
-        direct.Controls.Add(Label("Game executable")); var pathRow = Row(); var directPath = new TextBox { Text = draft.PathFor(new Layout { Executable = layout.Executable }), Width = 450, Name = "DirectExecutable" };
+        direct.Controls.Add(Label("Game executable")); var pathRow = Row(); var directPath = new TextBox { Width = 450, Name = "DirectExecutable" };
         // A slot being changed from Battle.net should use its saved direct override or the layout default.
         directPath.Text = useDefault.Checked ? layout.Executable : draft.Executable;
         var browse = Button("Browse…", 108); pathRow.Controls.AddRange(new Control[] { directPath, browse }); direct.Controls.Add(pathRow);

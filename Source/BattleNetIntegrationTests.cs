@@ -94,6 +94,29 @@ internal sealed class BattleNetIntegrationTests : Form
             Check("The next account is selected only after the previous game window has opened", slow.Plays == 2 && windowsAtSecondPrepare == 1);
             Check("Both slow-loading clients are placed at their positions", sequential.Assign(ordered, sequential.Scan(ordered)).Count == 2
                 && sequential.Assign(ordered, sequential.Scan(ordered)).All(p => p.Value.Bounds == ordered.Slots.Single(s => s.Id == p.Key).Bounds));
+            async Task CloseAll() { foreach (var process in gateway.Processes) { try { if (!process.HasExited) { process.CloseMainWindow(); await process.WaitForExitAsync(); } } catch { } } }
+            await CloseAll();
+            // A Play that Battle.net never pressed must not stay pending, or a retry could never press it.
+            var refusing = new FakeGateway(executable, gateway.Processes) { RefusePlay = true };
+            var retry = new Layout { Slots = new() { NewSlot(1) } }; var retrying = new Launcher(refusing); bool refused = false;
+            try { await retrying.Run(retry, monitors, true, lines.Add, CancellationToken.None); } catch (InvalidOperationException ex) { refused = ex.Message.Contains("not ready"); }
+            Check("A Play that was never pressed leaves no pending launch", refused && refusing.Plays == 0 && retry.Slots[0].BattleNet!.PendingSinceUtc.Length == 0);
+            refusing.RefusePlay = false; await retrying.Run(retry, monitors, true, lines.Add, CancellationToken.None);
+            Check("Retrying after a Play that was never pressed presses it once", refusing.Plays == 1 && retry.Slots[0].BattleNet!.BoundIdentity.Length > 0);
+            await CloseAll();
+            // A launch left pending (here: cancelled right after its Play) is settled before other slots,
+            // so its window, once open, is not mistaken for an untracked client.
+            var pendingGateway = new FakeGateway(executable, gateway.Processes) { Arguments = "--window-delay 1500" };
+            var pair = new Layout { Slots = new() { NewSlot(1), NewSlot(2) } }; var settling = new Launcher(pendingGateway);
+            using var afterSecondPlay = new CancellationTokenSource(); pendingGateway.AfterPlay = () => { if (pendingGateway.Plays == 2) afterSecondPlay.Cancel(); };
+            try { await settling.Run(pair, monitors, true, lines.Add, afterSecondPlay.Token); } catch (OperationCanceledException) { }
+            pendingGateway.AfterPlay = null;
+            var firstClient = settling.Assign(pair, settling.Scan(pair))[pair.Slots[0].Id];
+            using (var process = Process.GetProcessById(firstClient.ProcessId)) { process.CloseMainWindow(); await process.WaitForExitAsync(); }
+            for (int i = 0; i < 100 && settling.Scan(pair).Count == 0; i++) await Task.Delay(100); // the pending client's window opens
+            bool blocked = false;
+            try { await settling.Run(pair, monitors, true, lines.Add, CancellationToken.None); } catch (InvalidOperationException ex) { blocked = ex.Message.Contains("not tracked"); }
+            Check("A pending launch is settled before other clients and does not block them", !blocked && pendingGateway.Plays == 3 && settling.Assign(pair, settling.Scan(pair)).Count == 2);
             lines.Add("Battle.net launch coordination checks passed using local fixtures only.");
         }
         catch (Exception ex) { lines.Add(ex.ToString()); Environment.ExitCode = 1; }
@@ -108,6 +131,7 @@ internal sealed class BattleNetIntegrationTests : Form
         public int Plays;
         public Action? AfterPlay, BeforePrepare;
         public string Arguments = "";
+        public bool RefusePlay;
         public readonly List<Process> Processes = processes ?? new();
         public readonly List<string> RequestedAccounts = new();
         public Process StartFixture() { var process = Process.Start(new ProcessStartInfo(executable, Arguments) { UseShellExecute = false })!; Processes.Add(process); return process; }
@@ -117,6 +141,9 @@ internal sealed class BattleNetIntegrationTests : Form
             if (profile.GameVersion != "World of Warcraft Classic") throw new InvalidOperationException("The selected version was not found in the fixture launcher.");
             return Task.FromResult(BattleNetAccounts.Resolve(profile, new[] { "WoW1 (EU)", "WoW2 (US)", "WoW3 (KR)", "WoW4 (EU)" }));
         }
-        public Task Play(BattleNetLaunch profile, string account, CancellationToken token) { token.ThrowIfCancellationRequested(); Plays++; RequestedAccounts.Add(account); StartFixture(); AfterPlay?.Invoke(); return Task.CompletedTask; }
+        public Task Play(BattleNetLaunch profile, string account, CancellationToken token)
+        {
+            if (RefusePlay) throw new PlayNotSentException(new InvalidOperationException("Battle.net is not ready to Play this game."));
+            token.ThrowIfCancellationRequested(); Plays++; RequestedAccounts.Add(account); StartFixture(); AfterPlay?.Invoke(); return Task.CompletedTask; }
     }
 }

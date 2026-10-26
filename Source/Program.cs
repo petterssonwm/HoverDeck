@@ -89,11 +89,30 @@ internal static class Program
         if (args.Length >= 3 && args[0] == "--integration-test") { Application.Run(new IntegrationTests(args[1], args[2])); return; }
         using var mutex = new Mutex(true, "Local\\HoverDeck.Application", out bool first);
         if (!first) { ThemedMessageBox.Show("HoverDeck is already running. Open it from the notification area.", "HoverDeck"); return; }
-        try { if (!args.Contains("--preview")) DisplayChangeSession.RecoverOnStartup(); Application.Run(new MainForm(args.Contains("--preview"))); BattleNetUi.PutAwayNow(); }
+        // A display arrangement or a hidden Battle.net left behind by a run that was killed is put back first.
+        // A failed restore keeps its recovery file for the next start and must not stop HoverDeck from starting.
+        if (!args.Contains("--preview"))
+        {
+            try { DisplayChangeSession.RecoverOnStartup(); }
+            catch (Exception ex)
+            {
+                LogError(ex);
+                ThemedMessageBox.Show("HoverDeck could not put back your previous display arrangement. It will try again the next time it starts.\n\n" + ex.Message, "Display arrangement", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            try { BattleNetUi.RecoverOnStartup(); } catch (Exception ex) { LogError(ex); }
+        }
+        // An error in an event handler is logged and shown in HoverDeck's own message box; HoverDeck keeps running.
+        Application.ThreadException += (_, e) => { LogError(e.Exception); ThemedMessageBox.Show(e.Exception.Message, "HoverDeck", MessageBoxButtons.OK, MessageBoxIcon.Error); };
+        try { Application.Run(new MainForm(args.Contains("--preview"))); }
         catch (Exception ex)
         {
-            try { Directory.CreateDirectory(Storage.DirectoryPath); File.AppendAllText(Path.Combine(Storage.DirectoryPath, "error.log"), DateTimeOffset.Now + " " + ex + Environment.NewLine); } catch { }
+            LogError(ex);
             ThemedMessageBox.Show(ex.Message, "HoverDeck could not start", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+        finally { BattleNetUi.PutAwayNow(); }
+    }
+    private static void LogError(Exception ex)
+    {
+        try { Directory.CreateDirectory(Storage.DirectoryPath); File.AppendAllText(Path.Combine(Storage.DirectoryPath, "error.log"), DateTimeOffset.Now + " " + ex + Environment.NewLine); } catch { }
     }
 }

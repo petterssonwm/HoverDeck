@@ -68,29 +68,40 @@ public static class Storage
     }
     public static readonly string SettingsPath = System.IO.Path.Combine(DirectoryPath, "settings.json");
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNameCaseInsensitive = true };
-    public static void Write<T>(string path, T value)
+    // The file is flushed to disk before it replaces the old one, so a power cut cannot leave it empty.
+    // With backup, the previous version is kept as .bak for Load to fall back on.
+    public static void Write<T>(string path, T value, bool backup = false)
     {
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
         var temp = path + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(value, Json));
-        File.Move(temp, path, true);
+        using (var file = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None)) { JsonSerializer.Serialize(file, value, Json); file.Flush(true); }
+        if (backup && File.Exists(path)) File.Replace(temp, path, path + ".bak", true);
+        else File.Move(temp, path, true);
     }
     public static Settings Load()
     {
-        if (!File.Exists(SettingsPath)) return new();
-        var s = JsonSerializer.Deserialize<Settings>(File.ReadAllText(SettingsPath), Json) ?? new();
+        // A damaged file, or one missing because a save was interrupted, falls back to the previous save.
+        string backup = SettingsPath + ".bak";
+        if (!File.Exists(SettingsPath)) return File.Exists(backup) ? Normalize(Read(backup)) : new();
+        Settings s;
+        try { s = Read(SettingsPath); }
+        catch (JsonException) when (File.Exists(backup)) { s = Read(backup); }
+        return Normalize(s);
+    }
+    private static Settings Normalize(Settings s)
+    {
         s.DelayMs = Math.Clamp(s.DelayMs, 0, 5000);
         s.Layouts ??= new();
-        foreach (var slot in s.Layouts.SelectMany(l => l.Slots)) slot.Layer = Math.Clamp(slot.Layer, 1, 9);
         s.BattleNetCatalog ??= new();
         s.WoWLibrary ??= new(); s.BattleNetConnections ??= new();
         foreach (var l in s.Layouts)
         {
             l.Slots ??= new();
-            foreach (var slot in l.Slots) { slot.Width = Math.Clamp(slot.Width, 160, 32000); slot.Height = Math.Clamp(slot.Height, 120, 32000); if (!Enum.IsDefined(slot.WindowMode)) slot.WindowMode = ClientWindowMode.Windowed; }
+            foreach (var slot in l.Slots) { slot.Width = Math.Clamp(slot.Width, 160, 32000); slot.Height = Math.Clamp(slot.Height, 120, 32000); slot.Layer = Math.Clamp(slot.Layer, 1, 9); if (!Enum.IsDefined(slot.WindowMode)) slot.WindowMode = ClientWindowMode.Windowed; }
         }
         return s;
     }
+    private static Settings Read(string path) => JsonSerializer.Deserialize<Settings>(File.ReadAllText(path), Json) ?? new();
 }
 public static class Matching
 {

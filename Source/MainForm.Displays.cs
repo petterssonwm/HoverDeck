@@ -10,14 +10,12 @@ public sealed partial class MainForm
     private readonly NumericUpDown displayX = Number(-64000, 64000), displayY = Number(-64000, 64000);
     private readonly CheckBox primaryDisplay = new() { Text = "Primary display", AutoSize = true, ForeColor = Ink, Margin = new(16, 5, 0, 0) };
     private readonly Label displaySize = new() { AutoSize = true, ForeColor = Muted, Margin = new(16, 7, 0, 0) };
-    private readonly Label displayValidation = new() { Dock = DockStyle.Fill, ForeColor = Muted, AutoEllipsis = true };
-    private Control? clientSidebar, clientDetails, displayDetails;
+    private readonly Label displayValidation = new() { Dock = DockStyle.Fill, ForeColor = Color.FromArgb(237, 185, 109), AutoEllipsis = true };
     private List<MonitorInfo> displayBaseline = new();
     private bool displayUiSync, displayApplying;
 
     private void ConfigureDisplayEditor(TableLayoutPanel editor, Control sidebar, Control details)
     {
-        clientSidebar = sidebar; clientDetails = details;
         var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = new(0, 0, 0, 8) };
         toolbar.ColumnStyles.Add(new(SizeType.Absolute, 98)); toolbar.ColumnStyles.Add(new(SizeType.Percent, 100)); toolbar.ColumnStyles.Add(new(SizeType.Absolute, 158)); toolbar.ColumnStyles.Add(new(SizeType.Absolute, 82));
         fitDisplayView.Dock = applyDisplayChanges.Dock = resetDisplayChanges.Dock = DockStyle.Fill; displayModeStatus.Margin = new(10, 0, 0, 0);
@@ -31,7 +29,7 @@ public sealed partial class MainForm
         var selected = Flow(); selected.Controls.Add(Label("Selected display")); selected.Controls.Add(editMonitor); selected.Controls.Add(primaryDisplay); panel.Controls.Add(selected, 0, 0);
         var position = Flow(); position.Controls.Add(Label("X")); displayX.AccessibleName = "Display X"; position.Controls.Add(new FieldBox(displayX, 110)); position.Controls.Add(Label("Y", 12)); displayY.AccessibleName = "Display Y"; position.Controls.Add(new FieldBox(displayY, 110)); position.Controls.Add(displaySize); panel.Controls.Add(position, 0, 1);
         panel.Controls.Add(displayValidation, 0, 2);
-        displayDetails = panel; panel.Visible = false;
+        panel.Visible = false;
         var host = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new(0, 12, 0, 0) }; host.Controls.Add(details); host.Controls.Add(panel);
         editor.Controls.Clear(); editor.RowStyles.Clear(); editor.RowCount = 3;
         editor.RowStyles.Add(new(SizeType.Absolute, 0)); editor.RowStyles.Add(new(SizeType.Percent, 100)); editor.RowStyles.Add(new(SizeType.Absolute, ClientDetailsHeight)); toolbar.Visible = false;
@@ -99,7 +97,7 @@ public sealed partial class MainForm
         resetDisplayChanges.Enabled = dirty && !displayApplying;
         displayModeStatus.Text = preview ? "Preview mode · changes here are not sent to Windows" : dirty ? "Changes not applied yet" : "Matches your current Windows arrangement";
         // Only problems are spelled out; the toolbar already says whether there are unapplied changes.
-        displayValidation.Text = error ?? ""; displayValidation.ForeColor = Color.FromArgb(237, 185, 109);
+        displayValidation.Text = error ?? "";
         status.Text = "Arranging Windows displays";
     }
     private async Task ApplyDisplayArrangement()
@@ -136,7 +134,7 @@ internal sealed class DisplayKeepForm : Form
     {
         Text = "Keep this display arrangement?"; ClientSize = new(470, 170); FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = MinimizeBox = false;
         StartPosition = FormStartPosition.Manual; Location = new(screen.X + (screen.Width - Width) / 2, screen.Y + (screen.Height - Height) / 2); TopMost = true;
-        Font = new("Segoe UI", 11); BackColor = AppTheme.Surface; ForeColor = AppTheme.Ink; DialogFrame.Apply(this);
+        Font = MessageFont; BackColor = AppTheme.Surface; ForeColor = AppTheme.Ink; DialogFrame.Apply(this);
         var message = new Label { Bounds = new(22, 20, 425, 64) }; Controls.Add(message);
         var keep = new Button { Text = "Keep changes", Bounds = new(166, 112, 132, 36), DialogResult = DialogResult.OK }; AppTheme.Primary(keep);
         var revert = new Button { Text = "Revert", Bounds = new(312, 112, 132, 36), DialogResult = DialogResult.Cancel, FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonFace, ForeColor = AppTheme.Ink }; revert.FlatAppearance.BorderColor = AppTheme.ButtonBorder;
@@ -145,6 +143,7 @@ internal sealed class DisplayKeepForm : Form
         timer.Tick += (_, _) => Tick(); Tick(); timer.Start();
     }
     protected override void OnFormClosed(FormClosedEventArgs e) { timer.Dispose(); base.OnFormClosed(e); }
+    private static readonly Font MessageFont = new("Segoe UI", 11);
 }
 
 internal sealed class DisplayIdentifyForm : Form
@@ -157,8 +156,9 @@ internal sealed class DisplayIdentifyForm : Form
         FormBorderStyle = FormBorderStyle.None; ShowInTaskbar = false; TopMost = true; Size = new(170, 110); StartPosition = FormStartPosition.Manual;
         Location = new(monitor.WorkArea.X + (monitor.WorkArea.Width - Width) / 2, monitor.WorkArea.Y + (monitor.WorkArea.Height - Height) / 2);
         BackColor = AppTheme.Surface; ForeColor = AppTheme.Blue;
-        Controls.Add(new Label { Text = number, Font = new("Segoe UI", 42, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter });
+        Controls.Add(new Label { Text = number, Font = NumberFont, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter });
         timer.Tick += (_, _) => Close(); timer.Start();
     }
+    private static readonly Font NumberFont = new("Segoe UI", 42, FontStyle.Bold);
     protected override void OnFormClosed(FormClosedEventArgs e) { timer.Dispose(); base.OnFormClosed(e); }
 }
