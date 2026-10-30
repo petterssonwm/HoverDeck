@@ -16,7 +16,7 @@ public sealed partial class MainForm : Form
     private readonly DarkComboBox profiles = new() { Dock = DockStyle.Fill };
     private readonly NumericUpDown count = Number(1, 32);
     private readonly ListBox slots = new() { Dock = DockStyle.Fill, IntegralHeight = false, BorderStyle = BorderStyle.None };
-    private readonly PillToggle toggle = new() { Text = "Hover focus off" };
+    private readonly HoverSwitch toggle = new() { Text = "Hover focus off" };
     private readonly Label launchSummary = new();
     private readonly NumericUpDown posX = Number(-64000, 64000), posY = Number(-64000, 64000), sizeW = Number(160, 32000), sizeH = Number(120, 32000);
     private readonly DarkComboBox targetMonitor = new() { Name = "TargetMonitor", Width = 125 };
@@ -270,7 +270,7 @@ public sealed partial class MainForm : Form
         hotkeyRegistered = Native.RegisterHotKey(Handle, 1, settings.HotkeyModifiers | 0x4000, (uint)settings.HotkeyKey);
         Log("The global hotkey is in use. Choose another in Settings → Hover focus."); return false;
     }
-    private void UpdateHotkeyLabel() => hints.SetToolTip(toggle, "Focus follows the mouse over your WoW clients. Shortcut: " + HotkeyText());
+    private void UpdateHotkeyLabel() { toggle.Detail = HotkeyText(); hints.SetToolTip(toggle, "Focus follows the mouse over your WoW clients. Shortcut: " + HotkeyText()); }
     protected override void WndProc(ref Message m)
     {
         if (HandleFrameMessage(ref m)) return;

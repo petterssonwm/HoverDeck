@@ -23,7 +23,7 @@ Settings menu: WoW folders, Battle.net connections, Hover focus, Minimize to not
 Settings > Activity log shows or hides the activity log below the map. It is hidden initially to leave more room for the map.
 Clients / Arrange displays / Identify (above the map): switch between editing client positions and arranging the Windows displays, or show each display's number on its screen. The display map refreshes from Windows automatically.
 
-The hover-focus toggle is at the top right; hover over it to see its shortcut. Start clients (bottom of the sidebar) fills missing slots and moves every open client into place, while reusing assigned clients. While it runs, its progress and a Cancel button replace it; Cancel leaves already-opened clients running. The arrow on Start clients opens Close clients (closes this layout's open clients as if you clicked each window's X, after a confirmation; nothing is force-killed) and Restart clients (closes them, then runs Start clients). A client that is still running after 30 seconds, for example because the game shows a prompt, is reported for you to close yourself. Apply positions appears under Edit client whenever an open client's window is not where the map says (for example after you drag it); it moves open clients into place without launching or logging into any games.
+The Hover focus switch sits directly above Start clients, in the same frame, and shows its shortcut; the frame turns blue while hover focus is on. Start clients (bottom of the sidebar) fills missing slots and moves every open client into place, while reusing assigned clients. While it runs, its progress and a Cancel button replace it; Cancel leaves already-opened clients running. The arrow on Start clients opens Close clients (closes this layout's open clients as if you clicked each window's X, after a confirmation; nothing is force-killed) and Restart clients (closes them, then runs Start clients). A client that is still running after 30 seconds, for example because the game shows a prompt, is reported for you to close yourself. Apply positions appears under Edit client whenever an open client's window is not where the map says (for example after you drag it); it moves open clients into place without launching or logging into any games.
 
 CLIENT EDITOR
 
@@ -112,7 +112,7 @@ This edits extended-desktop positions and the primary monitor. Resolution, rotat
 
 HOVER FOCUS
 
-Use the main toggle or the saved global hotkey. Settings > Hover focus adjusts the delay from 0 to 5000 milliseconds and changes the shortcut; Ctrl+Alt+H and 50 ms are the defaults. Actual timing follows native Windows activation.
+Use the Hover focus switch above Start clients or the saved global hotkey. Settings > Hover focus adjusts the delay from 0 to 5000 milliseconds and changes the shortcut; Ctrl+Alt+H and 50 ms are the defaults. Actual timing follows native Windows activation.
 
 Only game executable paths configured in saved layouts are eligible. Hover focus gives keyboard focus without clicking or typing and uses Windows' no-raise tracking mode. Fullscreen-windowed taskbar coverage separately adjusts the relevant game windows' stacking while WoW is active. Hover focus pauses while mouse buttons are held and while launch/login setup is active.
 

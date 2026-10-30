@@ -42,24 +42,38 @@ internal sealed class NavLink : CheckBox
     }
 }
 
-// Rounded status pill used for the hover-focus toggle.
-internal sealed class PillToggle : CheckBox
+// The hover-focus switch at the top of the launch frame: a sliding switch, its state and the shortcut.
+// The parent draws the frame around it and Start clients in FrameColor; this control paints the top
+// part with rounded top corners and the divider above Start clients. On, everything turns blue.
+internal sealed class HoverSwitch : CheckBox
 {
-    public PillToggle()
+    private static readonly Font DetailFont = new("Segoe UI", 8f);
+    private string detail = "";
+    public string Detail { get => detail; set { detail = value; Invalidate(); } }
+    public Color FrameColor => Checked && Enabled ? Blue : FieldBorder;
+    public HoverSwitch()
     {
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
-        AutoSize = false; Font = new("Segoe UI", 8.5f, FontStyle.Bold); Cursor = Cursors.Hand; Size = new(172, 34);
+        AutoSize = false; Font = new("Segoe UI", 8.5f, FontStyle.Bold); Cursor = Cursors.Hand; Height = 48;
     }
+    protected override void OnCheckedChanged(EventArgs e) { Invalidate(); Parent?.Invalidate(); base.OnCheckedChanged(e); }
+    protected override void OnEnabledChanged(EventArgs e) { Invalidate(); Parent?.Invalidate(); base.OnEnabledChanged(e); }
     protected override void OnPaint(PaintEventArgs e)
     {
-        var g = e.Graphics; g.Clear(Parent?.BackColor ?? Bar); g.SmoothingMode = SmoothingMode.AntiAlias;
-        var r = new RectangleF(.5f, .5f, Width - 1.5f, Height - 1.5f);
-        using var path = Round(r, r.Height / 2);
-        using var fill = new SolidBrush(Checked ? BlueWash : Color.FromArgb(26, 29, 36)); g.FillPath(fill, path);
-        using var edge = new Pen(Checked ? Blue : FieldBorder); g.DrawPath(edge, path);
-        float dot = 8, dy = (Height - dot) / 2f;
-        using var dotBrush = new SolidBrush(!Enabled ? Color.FromArgb(60, 64, 72) : Checked ? Online : Color.FromArgb(92, 99, 112)); g.FillEllipse(dotBrush, 15, dy, dot, dot);
-        DrawTracked(g, Text.ToUpperInvariant(), Font, Enabled ? Color.White : Muted, new Rectangle(31, 0, Width - 40, Height), .6f);
+        var g = e.Graphics; g.Clear(Parent?.BackColor ?? Rail); g.SmoothingMode = SmoothingMode.AntiAlias;
+        bool on = Checked && Enabled;
+        // Rounded at the top only: the shape runs past the bottom edge, so the bottom corners stay square.
+        using (var shape = Round(new RectangleF(0, 0, Width, Height + 8), 5))
+        using (var fill = new SolidBrush(on ? Color.FromArgb(14, 39, 66) : Surface)) g.FillPath(fill, shape);
+        using (var divider = new Pen(FrameColor)) g.DrawLine(divider, 0, Height - 1, Width, Height - 1);
+        var track = new RectangleF(12, (Height - 20) / 2f, 36, 20);
+        using (var trackShape = Round(track, 10))
+        using (var trackFill = new SolidBrush(on ? Blue : Color.FromArgb(44, 49, 59))) g.FillPath(trackFill, trackShape);
+        using (var knob = new SolidBrush(!Enabled ? Color.FromArgb(70, 75, 84) : on ? Color.White : Color.FromArgb(138, 145, 160)))
+            g.FillEllipse(knob, on ? track.Right - 17 : track.X + 3, track.Y + 3, 14, 14);
+        int x = (int)track.Right + 12;
+        DrawTracked(g, Text.ToUpperInvariant(), Font, !Enabled ? Muted : on ? Color.White : Color.FromArgb(201, 206, 216), new Rectangle(x, 7, Width - x - 8, 18), .7f);
+        TextRenderer.DrawText(g, Detail, DetailFont, new Rectangle(x, 26, Width - x - 8, 16), on ? Color.FromArgb(143, 198, 255) : Muted, TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
         if (Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(g, Rectangle.Inflate(ClientRectangle, -3, -3));
     }
 }
@@ -71,6 +85,8 @@ internal sealed class BlueButton : Button
     private const int ArrowWidth = 46;
     private bool hot, down, overArrow, pressedArrow;
     public bool ShowArrow { get; set; }
+    // Square top corners, for a button that sits directly under another part of the same frame.
+    public bool SquareTop { get; set; }
     public event Action? ArrowClick;
     public BlueButton(string text)
     {
@@ -100,7 +116,7 @@ internal sealed class BlueButton : Button
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics; g.Clear(Parent?.BackColor ?? Rail); g.SmoothingMode = SmoothingMode.AntiAlias;
-        using var path = Round(new RectangleF(0, 0, Width - 1, Height - 1), 5);
+        using var path = SquareTop ? Round(new RectangleF(0, -8, Width - 1, Height + 7), 5) : Round(new RectangleF(0, 0, Width - 1, Height - 1), 5);
         var main = Fill(Enabled, down && !pressedArrow, hot && !overArrow);
         using (var fill = new LinearGradientBrush(new RectangleF(0, 0, Width, Height), main.Top, main.Bottom, 90f)) g.FillPath(fill, path);
         int split = ShowArrow ? Width - ArrowWidth : Width;

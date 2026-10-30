@@ -29,7 +29,7 @@ public sealed partial class MainForm
 
         sidebar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, BackColor = AppTheme.Rail, Padding = new(0, 18, 1, 20), Margin = Padding.Empty };
         foreach (int height in new[] { 22, 50, 36 }) sidebar.RowStyles.Add(new(SizeType.Absolute, height));
-        sidebar.RowStyles.Add(new(SizeType.Percent, 100)); sidebar.RowStyles.Add(new(SizeType.Absolute, 0)); sidebar.RowStyles.Add(new(SizeType.Absolute, 62));
+        sidebar.RowStyles.Add(new(SizeType.Percent, 100)); sidebar.RowStyles.Add(new(SizeType.Absolute, 0)); sidebar.RowStyles.Add(new(SizeType.Absolute, 112));
         sidebar.Paint += (_, e) => { using var line = new Pen(AppTheme.Line); e.Graphics.DrawLine(line, sidebar.Width - 1, 0, sidebar.Width - 1, sidebar.Height); };
         sidebar.Controls.Add(new CapsLabel("Layout") { Margin = new(18, 4, 0, 0) }, 0, 0);
         profiles.Margin = new(18, 0, 18, 0); profiles.AccessibleName = "Layout"; sidebar.Controls.Add(profiles, 0, 1);
@@ -39,7 +39,15 @@ public sealed partial class MainForm
         slots.Margin = Padding.Empty; sidebar.Controls.Add(slots, 0, 3);
         status.Dock = DockStyle.Fill; status.Margin = new(18, 0, 18, 0); status.TextAlign = ContentAlignment.BottomLeft; sidebar.Controls.Add(status, 0, 4);
         start.Dock = cancel.Dock = DockStyle.Fill; cancel.Font = new("Segoe UI", 10.5f, FontStyle.Bold); cancel.Visible = cancel.Enabled = false;
-        launchArea.Controls.Add(start); launchArea.Controls.Add(cancel); sidebar.Controls.Add(launchArea, 0, 5);
+        // The hover switch and Start clients share one frame, which turns blue while hover focus is on.
+        toggle.Dock = DockStyle.Top; start.SquareTop = true; cancel.FlatAppearance.BorderSize = 0; launchArea.Padding = new(1);
+        launchArea.Controls.Add(start); launchArea.Controls.Add(cancel); launchArea.Controls.Add(toggle); sidebar.Controls.Add(launchArea, 0, 5);
+        launchArea.Paint += (_, e) =>
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            using var frame = AppTheme.Round(new RectangleF(.5f, .5f, launchArea.Width - 1.5f, launchArea.Height - 1.5f), 6);
+            using var edge = new Pen(toggle.FrameColor); e.Graphics.DrawPath(edge, frame);
+        };
         slots.DrawMode = DrawMode.OwnerDrawFixed; slots.ItemHeight = 62; slots.DrawItem += DrawClientItem; mainArea.Controls.Add(sidebar, 0, 0);
 
         var content = workspaceContent = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new(28, 0, 28, 20), Margin = Padding.Empty, BackColor = Background };
@@ -186,13 +194,13 @@ public sealed partial class MainForm
         minimizeButton.Click += (_, _) => WindowState = FormWindowState.Minimized;
         maximizeButton.Click += (_, _) => WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
         closeButton.Click += (_, _) => Close();
-        toggle.AccessibleName = "Toggle WoW hover focus"; toggle.Height = 30; toggle.Margin = new(0, (TitleBarHeight - 30) / 2, 14, 0);
+        toggle.AccessibleName = "Toggle WoW hover focus";
         openCount.Margin = new(0, (TitleBarHeight - 15) / 2, 16, 0); openCount.BackColor = AppTheme.Bar; openCount.Font = new("Segoe UI", 9f);
         var windowButtons = new Panel { Size = new(139, TitleBarHeight), Margin = new(0), BackColor = AppTheme.Bar };
         closeButton.Dock = maximizeButton.Dock = minimizeButton.Dock = DockStyle.Left;
         windowButtons.Controls.AddRange(new Control[] { closeButton, maximizeButton, minimizeButton });
         windowButtons.Paint += (_, e) => { using var line = new Pen(AppTheme.Line); e.Graphics.DrawLine(line, 0, 0, 0, windowButtons.Height); };
-        titleRight.Controls.AddRange(new Control[] { windowButtons, toggle, openCount });
+        titleRight.Controls.AddRange(new Control[] { windowButtons, openCount });
         titleBar.Controls.Add(mainMenu); titleBar.Controls.Add(logo); titleBar.Controls.Add(titleRight);
     }
     private Control Stepper()

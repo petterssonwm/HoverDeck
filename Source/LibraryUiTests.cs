@@ -113,6 +113,17 @@ internal sealed class LibraryUiTests : Form
                     using (var menuShot = new Bitmap(menuArea.Width, menuArea.Height)) { using (var g = Graphics.FromImage(menuShot)) g.CopyFromScreen(menuArea.Location, Point.Empty, menuArea.Size); menuShot.Save(Path.Combine(output, "start-menu-open.png")); }
                     if (actions.Bounds.Bottom > startButton.RectangleToScreen(startButton.ClientRectangle).Top) throw new Exception("The Start clients menu does not open above the button.");
                     actions.Close(); lines.Add("PASS: the arrow menu opens above Start clients");
+                    // The hover switch shares Start clients' frame, and the frame turns blue while it is on.
+                    var hoverSwitch = Descendants(idle).OfType<HoverSwitch>().Single(); var dock = startButton.Parent!;
+                    if (hoverSwitch.Parent != dock || Descendants(idle.Controls.Find("TitleBar", true).Single()).Contains(hoverSwitch) || hoverSwitch.Bottom > startButton.Top)
+                        throw new Exception("The hover focus switch is not directly above Start clients in the same frame.");
+                    void Shoot(string name) { dock.Refresh(); using var shot = new Bitmap(dock.Width + 24, dock.Height + 24); using (var g = Graphics.FromImage(shot)) g.Clear(AppTheme.Rail); dock.DrawToBitmap(shot, new Rectangle(12, 12, dock.Width, dock.Height)); shot.Save(Path.Combine(output, name)); }
+                    hoverSwitch.Enabled = true; hoverSwitch.Checked = false; Shoot("hover-switch-off.png");
+                    if (hoverSwitch.FrameColor == AppTheme.Blue || !hoverSwitch.Detail.Contains('+')) throw new Exception("The switch frame is blue while off, or the shortcut is missing.");
+                    hoverSwitch.Checked = true; Shoot("hover-switch-on.png");
+                    if (hoverSwitch.FrameColor != AppTheme.Blue || hoverSwitch.Text != "Hover focus on") throw new Exception("Turning hover focus on did not turn the frame blue.");
+                    hoverSwitch.Checked = false;
+                    lines.Add("PASS: the hover focus switch sits in Start clients' frame, shows the shortcut, and turns the frame blue when on");
                     // Simulate an open client window that sits somewhere other than its map position.
                     var map = Descendants(idle).OfType<LayoutCanvas>().First();
                     var applyButton = idle.Controls.Find("ApplyPositions", true).Single();
