@@ -40,14 +40,10 @@ public sealed partial class MainForm
         status.Dock = DockStyle.Fill; status.Margin = new(18, 0, 18, 0); status.TextAlign = ContentAlignment.BottomLeft; sidebar.Controls.Add(status, 0, 4);
         start.Dock = cancel.Dock = DockStyle.Fill; cancel.Font = new("Segoe UI", 10.5f, FontStyle.Bold); cancel.Visible = cancel.Enabled = false;
         // The hover switch and Start clients share one frame, which turns blue while hover focus is on.
-        toggle.Dock = DockStyle.Top; start.SquareTop = true; cancel.FlatAppearance.BorderSize = 0; launchArea.Padding = new(1);
+        // Each draws its own half of the outline, so no child can paint over the frame's corners.
+        toggle.Dock = DockStyle.Top; start.SquareTop = true; start.Frame = () => toggle.FrameColor;
+        cancel.Resize += (_, _) => { using var shape = AppTheme.Round(new RectangleF(0, -8, cancel.Width, cancel.Height + 8), 6); var old = cancel.Region; cancel.Region = new Region(shape); old?.Dispose(); };
         launchArea.Controls.Add(start); launchArea.Controls.Add(cancel); launchArea.Controls.Add(toggle); sidebar.Controls.Add(launchArea, 0, 5);
-        launchArea.Paint += (_, e) =>
-        {
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using var frame = AppTheme.Round(new RectangleF(.5f, .5f, launchArea.Width - 1.5f, launchArea.Height - 1.5f), 6);
-            using var edge = new Pen(toggle.FrameColor); e.Graphics.DrawPath(edge, frame);
-        };
         slots.DrawMode = DrawMode.OwnerDrawFixed; slots.ItemHeight = 62; slots.DrawItem += DrawClientItem; mainArea.Controls.Add(sidebar, 0, 0);
 
         var content = workspaceContent = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new(28, 0, 28, 20), Margin = Padding.Empty, BackColor = Background };

@@ -43,8 +43,8 @@ internal sealed class NavLink : CheckBox
 }
 
 // The hover-focus switch at the top of the launch frame: a sliding switch, its state and the shortcut.
-// The parent draws the frame around it and Start clients in FrameColor; this control paints the top
-// part with rounded top corners and the divider above Start clients. On, everything turns blue.
+// It draws the top half of the frame (rounded top corners and the divider above Start clients); the
+// button below draws the bottom half in the same FrameColor. On, everything turns blue.
 internal sealed class HoverSwitch : CheckBox
 {
     private static readonly Font DetailFont = new("Segoe UI", 8f);
@@ -56,16 +56,16 @@ internal sealed class HoverSwitch : CheckBox
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
         AutoSize = false; Font = new("Segoe UI", 8.5f, FontStyle.Bold); Cursor = Cursors.Hand; Height = 48;
     }
-    protected override void OnCheckedChanged(EventArgs e) { Invalidate(); Parent?.Invalidate(); base.OnCheckedChanged(e); }
-    protected override void OnEnabledChanged(EventArgs e) { Invalidate(); Parent?.Invalidate(); base.OnEnabledChanged(e); }
+    protected override void OnCheckedChanged(EventArgs e) { Parent?.Invalidate(true); base.OnCheckedChanged(e); }
+    protected override void OnEnabledChanged(EventArgs e) { Parent?.Invalidate(true); base.OnEnabledChanged(e); }
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics; g.Clear(Parent?.BackColor ?? Rail); g.SmoothingMode = SmoothingMode.AntiAlias;
         bool on = Checked && Enabled;
         // Rounded at the top only: the shape runs past the bottom edge, so the bottom corners stay square.
-        using (var shape = Round(new RectangleF(0, 0, Width, Height + 8), 5))
-        using (var fill = new SolidBrush(on ? Color.FromArgb(14, 39, 66) : Surface)) g.FillPath(fill, shape);
-        using (var divider = new Pen(FrameColor)) g.DrawLine(divider, 0, Height - 1, Width, Height - 1);
+        using (var shape = Round(new RectangleF(.5f, .5f, Width - 1.5f, Height + 8), 6))
+        using (var fill = new SolidBrush(on ? Color.FromArgb(14, 39, 66) : Surface))
+        using (var edge = new Pen(FrameColor)) { g.FillPath(fill, shape); g.DrawPath(edge, shape); g.DrawLine(edge, 0, Height - 1, Width, Height - 1); }
         var track = new RectangleF(12, (Height - 20) / 2f, 36, 20);
         using (var trackShape = Round(track, 10))
         using (var trackFill = new SolidBrush(on ? Blue : Color.FromArgb(44, 49, 59))) g.FillPath(trackFill, trackShape);
@@ -85,8 +85,9 @@ internal sealed class BlueButton : Button
     private const int ArrowWidth = 46;
     private bool hot, down, overArrow, pressedArrow;
     public bool ShowArrow { get; set; }
-    // Square top corners, for a button that sits directly under another part of the same frame.
+    // Square top corners and an outline in Frame's colour, for a button that is the bottom half of a frame.
     public bool SquareTop { get; set; }
+    public Func<Color>? Frame { get; set; }
     public event Action? ArrowClick;
     public BlueButton(string text)
     {
@@ -116,7 +117,7 @@ internal sealed class BlueButton : Button
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics; g.Clear(Parent?.BackColor ?? Rail); g.SmoothingMode = SmoothingMode.AntiAlias;
-        using var path = SquareTop ? Round(new RectangleF(0, -8, Width - 1, Height + 7), 5) : Round(new RectangleF(0, 0, Width - 1, Height - 1), 5);
+        using var path = SquareTop ? Round(new RectangleF(.5f, -8, Width - 1.5f, Height + 7), 6) : Round(new RectangleF(0, 0, Width - 1, Height - 1), 5);
         var main = Fill(Enabled, down && !pressedArrow, hot && !overArrow);
         using (var fill = new LinearGradientBrush(new RectangleF(0, 0, Width, Height), main.Top, main.Bottom, 90f)) g.FillPath(fill, path);
         int split = ShowArrow ? Width - ArrowWidth : Width;
@@ -132,6 +133,7 @@ internal sealed class BlueButton : Button
             g.FillPolygon(glyph, new PointF[] { new(cx - 5, cy + 2.5f), new(cx + 5, cy + 2.5f), new(cx, cy - 3) });
         }
         if (Enabled) { using var shine = new Pen(Color.FromArgb(110, 188, 255)); g.DrawLine(shine, 5, 0.5f, Width - 6, 0.5f); }
+        if (SquareTop && Frame is not null) { using var edge = new Pen(Frame()); g.DrawPath(edge, path); }
         DrawTracked(g, Text.ToUpperInvariant(), Font, Enabled ? Color.White : Color.FromArgb(120, 140, 165), new Rectangle(0, 0, split, Height), 1.6f, true);
         if (Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(g, Rectangle.Inflate(ClientRectangle, -4, -4));
     }
