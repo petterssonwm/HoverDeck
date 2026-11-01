@@ -33,14 +33,15 @@ internal sealed class LibraryUiTests : Form
                 var advancedEditor = new ClientLaunchForm(slot, new(), settings); ((TabControl)advancedEditor.Controls.Find("ClientEditorTabs", true).Single()).SelectedIndex = 1; Render(advancedEditor, "advanced");
                 Render(new ClientLaunchForm(new Slot { Name = "Private client" }, new Layout { Executable = @"D:\Private server\Wow.exe" }, settings), "direct-client");
                 Render(new WoWFoldersForm(settings.WoWLibrary), "folders");
-                // The setup guide: six steps; Clients defaults to Battle.net with the installed versions and the imported
+                // The setup guide: five steps; Clients defaults to Battle.net with the installed versions and the imported
                 // accounts in order; only looking at it changes nothing; Finish writes each client's version and account.
                 var guideLayout = new Layout { Name = "Guide", Slots = new() { new() { Name = "Client 1" }, new() { Name = "Client 2" } } };
-                using (var guide = new SetupGuideForm(settings, guideLayout, () => { }, () => "Ctrl + Alt + H", () => { }, _ => { }, _ => { }))
+                var warnings = new List<string>();
+                using (var guide = new SetupGuideForm(settings, guideLayout, () => { }, () => "Ctrl + Alt + H", () => { }, _ => { }, _ => { }, message => { warnings.Add(message); return true; }))
                 {
                     guide.ShowInTaskbar = false; guide.Show(); Application.DoEvents();
                     var guideNext = (Button)guide.Controls.Find("GuideNext", true).Single();
-                    for (int step = 0; step < 6; step++)
+                    for (int step = 0; step < 5; step++)
                     {
                         guide.Refresh();
                         using (var shot = new Bitmap(guide.Width, guide.Height)) { guide.DrawToBitmap(shot, new Rectangle(Point.Empty, guide.Size)); shot.Save(Path.Combine(output, $"setup-step-{step + 1}.png")); }
@@ -52,9 +53,27 @@ internal sealed class LibraryUiTests : Form
                         }
                         guideNext.PerformClick(); Application.DoEvents();
                     }
-                    if (guide.DialogResult != DialogResult.OK) throw new Exception("Finish did not complete the setup guide.");
+                    if (guide.DialogResult != DialogResult.OK || warnings.Count != 0) throw new Exception("Finish did not complete the setup guide, or warned although everything was set up.");
                 }
-                lines.Add("PASS: the setup guide walks through six steps; Clients defaults to Battle.net with the found versions and imported accounts, and viewing it changes nothing");
+                lines.Add("PASS: the setup guide walks through five steps; Clients defaults to Battle.net with the found versions and imported accounts, and viewing it changes nothing");
+                // Not signed in: Next on Battle.net warns; Clients cannot continue unfinished, only through Skip, which warns too.
+                var unsigned = new Settings { WoWLibrary = settings.WoWLibrary };
+                using (var guide = new SetupGuideForm(unsigned, new Layout { Slots = new() { new() } }, () => { }, () => "Ctrl + Alt + H", () => { }, _ => { }, _ => { }, message => { warnings.Add(message); return warnings.Count > 1; }))
+                {
+                    guide.ShowInTaskbar = false; guide.Show(); Application.DoEvents();
+                    var guideNext = (Button)guide.Controls.Find("GuideNext", true).Single(); var title = Descendants(guide).OfType<Label>().First(l => l.Text.StartsWith("STEP "));
+                    guideNext.PerformClick(); guideNext.PerformClick(); Application.DoEvents();
+                    if (warnings.Count != 1 || !warnings[0].Contains("can't start Blizzard's WoW versions") || title.Text != "STEP 2 OF 5") throw new Exception("Next without signing in did not warn and stay, as answered.");
+                    guideNext.PerformClick(); Application.DoEvents();
+                    if (title.Text != "STEP 3 OF 5") throw new Exception("Continuing without signing in did not reach the Clients step.");
+                    if (!guide.Controls.Find("GuideConnectClients", true).Single().Visible) throw new Exception("The Clients step offers no Battle.net sign-in when not signed in.");
+                    guideNext.PerformClick(); Application.DoEvents();
+                    if (title.Text != "STEP 3 OF 5") throw new Exception("Next left an unfinished Clients step.");
+                    ((Button)guide.Controls.Find("GuideSkipClients", true).Single()).PerformClick(); Application.DoEvents();
+                    if (title.Text != "STEP 4 OF 5" || !warnings[^1].Contains("Start clients can't open any WoW") || guide.ClientsChanged) throw new Exception("Skip for now did not warn and continue without applying clients.");
+                    guide.Close();
+                }
+                lines.Add("PASS: without Battle.net the guide warns on Next, offers sign-in on the Clients step, blocks an unfinished Clients step and only skips it after a warning");
                 SetupGuideForm.ApplyClients(guideLayout, false, "", 3, new[] { new ClientChoice(installation, connection, connection.Accounts[1]), new ClientChoice(installation, connection, connection.Accounts[0]), new ClientChoice(installation, null, null) }, i => new Slot { Name = $"Client {i + 1}" });
                 if (guideLayout.Slots.Count != 3 || guideLayout.Slots.Any(s => s.LaunchMethod != ClientLaunchMethod.BattleNet) || guideLayout.Slots[0].BattleNet?.WebAccountId != "fixture-2"
                     || guideLayout.Slots[1].BattleNet?.AccountName != "WoW1 (EU)" || guideLayout.Slots[2].BattleNet?.GameVersion != installation.GameVersion || guideLayout.Slots[2].BattleNet?.AccountName != "")
@@ -168,6 +187,46 @@ internal sealed class LibraryUiTests : Form
                     if (hoverSwitch.FrameColor != AppTheme.Blue || hoverSwitch.Text != "Hover focus on") throw new Exception("Turning hover focus on did not turn the frame blue.");
                     hoverSwitch.Checked = false;
                     lines.Add("PASS: the hover focus switch sits in Start clients' frame, shows the shortcut, and turns the frame blue when on");
+                    // The tour after the guide: five bubbles in order, each pointing at the part it explains.
+                    using (var toured = new MainForm(true, settings))
+                    {
+                        toured.ShowInTaskbar = false; toured.Show(); Application.DoEvents();
+                        toured.StartTour(); Application.DoEvents();
+                        var stops = new (string Title, Control Target, CoachSide Side)[]
+                        {
+                            ("Your displays and clients", Descendants(toured).OfType<LayoutCanvas>().First(), CoachSide.Inside),
+                            ("Window mode", toured.Controls.Find("ClientWindowMode", true).Single(), CoachSide.Above),
+                            ("Layer", toured.Controls.Find("ClientLayer", true).Single(), CoachSide.Above),
+                            ("Edit client", toured.Controls.Find("EditClient", true).Single(), CoachSide.Above),
+                            ("Hover focus", Descendants(toured).OfType<HoverSwitch>().Single(), CoachSide.Right),
+                        };
+                        for (int i = 0; i < stops.Length; i++)
+                        {
+                            var bubble = toured.TourBubble ?? throw new Exception($"The tour shows no bubble at stop {i + 1}.");
+                            var target = stops[i].Target.RectangleToScreen(stops[i].Target.ClientRectangle);
+                            bool placed = stops[i].Side switch
+                            {
+                                CoachSide.Above => Math.Abs(bubble.Bottom - target.Top) <= 1, CoachSide.Right => Math.Abs(bubble.Left - target.Right) <= 1,
+                                _ => bubble.Bounds.IntersectsWith(target)
+                            };
+                            if (bubble.Title != stops[i].Title || !placed) throw new Exception($"Tour stop {i + 1} is '{bubble.Title}' at {bubble.Bounds}, not '{stops[i].Title}' beside {target}.");
+                            using (var shot = new Bitmap(toured.Width, toured.Height))
+                            {
+                                toured.DrawToBitmap(shot, new Rectangle(Point.Empty, toured.Size));
+                                using var picture = new Bitmap(bubble.Width, bubble.Height); bubble.DrawToBitmap(picture, new Rectangle(Point.Empty, bubble.Size));
+                                using (var g = Graphics.FromImage(shot))
+                                {
+                                    if (bubble.Region?.Clone() is { } clip) { clip.Translate(bubble.Left - toured.Left, bubble.Top - toured.Top); g.Clip = clip; }
+                                    g.DrawImage(picture, bubble.Left - toured.Left, bubble.Top - toured.Top);
+                                }
+                                shot.Save(Path.Combine(output, $"tour-{i + 1}.png"));
+                            }
+                            ((Button)bubble.Controls.Find("CoachNext", true).Single()).PerformClick(); Application.DoEvents();
+                        }
+                        if (toured.TourBubble is not null) throw new Exception("The tour did not end after its last bubble.");
+                        toured.Close();
+                    }
+                    lines.Add("PASS: the tour shows five bubbles in order (map, window mode, layer, Edit client, hover focus), each beside the part it explains, and ends with Got it");
                     // Simulate an open client window that sits somewhere other than its map position.
                     var map = Descendants(idle).OfType<LayoutCanvas>().First();
                     var applyButton = idle.Controls.Find("ApplyPositions", true).Single();

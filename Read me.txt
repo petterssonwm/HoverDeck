@@ -19,7 +19,8 @@ Main workspace: the left sidebar holds the saved layout, the number of clients (
 The top bar works as the window's title bar: drag it to move HoverDeck, double-click it to maximize, and use the minimize / maximize / close buttons at its right end. The window edges resize and Windows snap works as usual. Minimizing hides HoverDeck to the notification area by default; turn off Settings > Minimize to notification area to minimize it to the taskbar like a normal window instead.
 
 Layout menu: New, Save a copy, Capture open clients, Direct-launch defaults and Exit.
-Settings menu: WoW folders, Battle.net connections, Hover focus, Minimize to notification area, Activity log and Check for updates. These are shared across all layouts and clients.
+Settings menu: Setup guide, WoW folders, Battle.net connections, Hover focus, Minimize to notification area, Activity log and Check for updates. These are shared across all layouts and clients.
+The setup guide opens by itself the first time HoverDeck starts on a PC: sign in to Battle.net (your WoW accounts are imported as soon as you are signed in), choose a WoW version and account for each client or one private-server game, set the hover focus shortcut and switch delay, and choose where HoverDeck minimizes. A short tour then points at the map, Window mode, Layer, Edit client and the Hover focus switch. Settings > Setup guide opens the guide again.
 Settings > Activity log shows or hides the activity log below the map. It is hidden initially to leave more room for the map.
 Clients / Arrange displays / Identify (above the map): switch between editing client positions and arranging the Windows displays, or show each display's number on its screen. The display map refreshes from Windows automatically.
 
@@ -112,11 +113,11 @@ This edits extended-desktop positions and the primary monitor. Resolution, rotat
 
 HOVER FOCUS
 
-Use the Hover focus switch above Start clients or the saved global hotkey. Settings > Hover focus adjusts the delay from 0 to 5000 milliseconds and changes the shortcut; Ctrl+Alt+H and 50 ms are the defaults. Actual timing follows native Windows activation.
+Use the Hover focus switch above Start clients or the saved global hotkey. Settings > Hover focus adjusts the delay from 0 to 5000 milliseconds and changes the shortcut; The switch delay is how long the mouse rests on a client before it gets the keyboard; Ctrl+Alt+H and 10 ms are the defaults for new installs. Actual timing follows native Windows activation.
 
 Only game executable paths configured in saved layouts are eligible. Hover focus gives keyboard focus without clicking or typing and uses Windows' no-raise tracking mode. Fullscreen-windowed taskbar coverage separately adjusts the relevant game windows' stacking while WoW is active. Hover focus pauses while mouse buttons are held and while launch/login setup is active.
 
-While HoverDeck is open it manages system-wide active-window tracking. OFF pauses it. Minimize keeps HoverDeck and its shortcut in the notification area. Exit restores the original hover tracking, delay and raise settings. A separate watchdog also restores them after a crash. Changes are for the current Windows session, not permanent profile changes.
+While HoverDeck is open it manages system-wide active-window tracking. OFF pauses it. Minimize goes to the taskbar, or to the notification area if Settings > Minimize to notification area is on; the shortcut keeps working either way. Exit restores the original hover tracking, delay and raise settings. A separate watchdog also restores them after a crash. Changes are for the current Windows session, not permanent profile changes.
 
 If a game runs as administrator, run HoverDeck at the same permission level if Windows prevents window placement.
 

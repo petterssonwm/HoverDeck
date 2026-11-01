@@ -311,20 +311,41 @@ public sealed partial class MainForm
     // The click-through guide: opens by itself on a PC without settings, and from Settings → Setup guide.
     private async Task ShowSetupGuide()
     {
+        bool firstStart = settings.IsNew;
         await OpenSharedSettings(async () =>
         {
             await RefreshWoWLibrary();
             SetupGuideForm? shown = null; // the shortcut window opens on top of the guide
             using var guide = shown = new SetupGuideForm(settings, layout, SaveNow, HotkeyText, () => ChooseHotkey(shown ?? (IWin32Window)this), value => hover?.SetDelay(value),
                 tray => { if (sharedSettingsMenu.DropDownItems["MinimizeToTray"] is ToolStripMenuItem item) item.Checked = tray; });
-            if (guide.ShowDialog(this) == DialogResult.OK && guide.ClientsChanged)
+            bool finished = guide.ShowDialog(this) == DialogResult.OK;
+            if (finished && guide.ClientsChanged)
             {
                 SetupGuideForm.ApplyClients(layout, guide.UsePrivateServer, guide.PrivateGame, guide.ClientCount, guide.Clients, DefaultSlot);
                 launcher.Bindings.Clear(); BindLayout(); Log($"Setup guide: {layout.Slots.Count} client{(layout.Slots.Count == 1 ? "" : "s")} set up in {layout.Name}.");
             }
             settings.IsNew = false; UpdateHotkeyLabel(); SaveNow();
+            // The tour of the main window follows the guide on the first start, and whenever the guide is finished.
+            if (firstStart || finished) BeginInvoke(StartTour);
         });
     }
+    private CoachTour? tour;
+    // Bubbles pointing at the map, window mode, layer, Edit client and the hover focus switch, one at a time.
+    internal void StartTour()
+    {
+        if (tour is not null || closing || arrangeDisplays.Checked || !Visible || WindowState == FormWindowState.Minimized) return;
+        tour = new CoachTour(this, new CoachStep[]
+        {
+            new(canvas, "Your displays and clients", "This map shows your displays and where each WoW window goes. Drag a client to move it, and drag its bottom-right corner to resize it. Start clients puts every window right here.", CoachSide.Inside),
+            new(windowMode, "Window mode", "Keep this the same as the Display Mode in that WoW client's own settings (Windowed or Fullscreen windowed), so the game window fits its spot on the map.", CoachSide.Above),
+            new(layer, "Layer", "When clients overlap, the one on the higher layer stays in front, even when you click the one behind it. Clients on the same layer behave like normal windows.", CoachSide.Above),
+            new(Controls.Find("EditClient", true).Single(), "Edit client", "Choose the WoW version and Battle.net account this client starts with, or a private-server game. Double-clicking a client in the list does the same.", CoachSide.Above),
+            new(toggle, "Hover focus", $"Turn it on here or with {HotkeyText()}. The WoW client under your mouse then gets your keyboard, so you can switch between clients without clicking.", CoachSide.Right),
+        });
+        tour.Finished += () => tour = null;
+        tour.Start();
+    }
+    internal CoachBubble? TourBubble => tour?.Current;
     private void ShowHoverPreferences()
     {
         if (busy || displayApplying) return;

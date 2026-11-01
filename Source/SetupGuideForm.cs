@@ -5,121 +5,144 @@ internal sealed record ClientChoice(WoWInstallation? Installation, BattleNetConn
 
 // The first-run guide: Battle.net accounts, the clients to start, hover focus and minimizing, one
 // step at a time. Battle.net, hover focus and minimizing are saved as soon as they change, like in
-// Settings. The clients are applied on Finish, and only when that step was changed (or on a new PC),
-// so opening the guide later never alters existing clients by accident.
+// Settings. The clients are applied on Finish, unless that step was skipped, and only when it was
+// changed (or on a new PC), so opening the guide later never alters existing clients by accident.
 internal sealed class SetupGuideForm : Form
 {
-    private static readonly string[] Titles = { "Welcome", "Battle.net", "Clients", "Hover focus", "Minimize", "Done" };
-    private static readonly Color Body = Color.FromArgb(167, 174, 187);
+    private static readonly string[] Titles = { "Welcome", "Battle.net", "Clients", "Hover focus", "Minimize" };
+    private static readonly Color Body = Color.FromArgb(167, 174, 187), Problem = Color.FromArgb(237, 185, 109);
+    private const int ClientsStep = 2;
     private readonly Settings settings;
     private readonly Layout layout;
     private readonly Action save;
+    private readonly Func<string, bool> confirm;
     private readonly StepRail rail = new() { Dock = DockStyle.Left, Width = 200, Steps = Titles };
     private readonly Label caption = new() { AutoSize = true, ForeColor = AppTheme.Caption, Font = new("Segoe UI", 8f, FontStyle.Bold), Margin = new(0, 0, 0, 4) };
     private readonly Label heading = new() { AutoSize = true, ForeColor = AppTheme.Ink, Font = new("Segoe UI", 16f, FontStyle.Bold), Margin = new(0, 0, 0, 12) };
     private readonly Panel pages = new() { Dock = DockStyle.Fill, Margin = Padding.Empty };
-    private readonly Button back = new() { Text = "Back", Width = 110, Height = 36, Name = "GuideBack" }, next = new() { Text = "Next", Width = 130, Height = 36, Name = "GuideNext" };
+    private readonly Button back = new() { Text = "Back", Width = 110, Height = 36, Name = "GuideBack" }, next = new() { Text = "Next", Width = 130, Height = 36, Name = "GuideNext" },
+        skip = new() { Text = "Skip for now", Width = 130, Height = 36, Name = "GuideSkipClients" };
     private readonly List<Control> steps = new();
     private readonly ChoiceCard battleNetCard = new("Battle.net", "Pick a WoW version and account for each client."), privateCard = new("Private server", "Start a game file of your choice.");
     private readonly NumericUpDown count = new() { Minimum = 1, Maximum = 32, Width = 60, Name = "GuideClientCount", BorderStyle = BorderStyle.FixedSingle };
     private readonly FlowLayoutPanel rows = new() { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
+    private readonly FlowLayoutPanel privateRow = new() { AutoSize = true, WrapContents = false, Name = "GuidePrivateRow", Margin = new(0, 4, 0, 0) };
     private readonly TextBox gameFile = new() { Width = 360, Name = "GuidePrivateGame" };
-    private readonly Label clientNote = Para("");
+    private readonly Label clientNote = Para(""), battleNetStatus = Para("", AppTheme.Ink);
+    private readonly Button connectStep = new() { Text = "Connect Battle.net…", Width = 220, Height = 38, Name = "GuideConnectBattleNet", Margin = new(0, 4, 0, 12) };
+    private readonly Button connectHere = new() { Text = "Connect Battle.net…", Width = 220, Height = 36, Name = "GuideConnectClients", Margin = new(0, 0, 0, 12) };
+    private readonly Button addFolder = new() { Text = "Add WoW folder…", Width = 170, Height = 32, Name = "GuideAddFolder", Margin = new(0, 0, 0, 6) };
     private readonly List<(DarkComboBox Version, DarkComboBox Account)> clientRows = new();
     private int current;
-    private bool clientsChanged, filling;
+    private bool clientsChanged, clientsSkipped, filling;
     public bool UsePrivateServer => privateCard.Selected;
     public string PrivateGame => gameFile.Text.Trim().Trim('"');
-    // Applied on Finish only when the Clients step was changed, or on a new PC.
-    public bool ClientsChanged => clientsChanged || settings.IsNew;
-    public List<ClientChoice> Clients => clientRows.Take((int)count.Value).Select(r => r.Version.SelectedItem is WoWInstallation version && r.Account.SelectedItem is AccountItem account
-        ? new ClientChoice(version, account.Connection, account.License) : new ClientChoice(r.Version.SelectedItem as WoWInstallation, null, null)).ToList();
+    // Applied on Finish unless skipped, and only when the Clients step was changed, or on a new PC.
+    public bool ClientsChanged => !clientsSkipped && (clientsChanged || settings.IsNew);
     public int ClientCount => (int)count.Value;
+    public List<ClientChoice> Clients => clientRows.Take(ClientCount).Select(r => r.Account.SelectedItem is AccountItem account
+        ? new ClientChoice(r.Version.SelectedItem as WoWInstallation, account.Connection, account.License) : new ClientChoice(r.Version.SelectedItem as WoWInstallation, null, null)).ToList();
+    private List<WoWLicense> Accounts => settings.BattleNetConnections.SelectMany(c => c.Accounts).ToList();
 
-    public SetupGuideForm(Settings settings, Layout layout, Action save, Func<string> hotkeyText, Action chooseHotkey, Action<int> setDelay, Action<bool> setMinimizeToTray)
+    public SetupGuideForm(Settings settings, Layout layout, Action save, Func<string> hotkeyText, Action chooseHotkey, Action<int> setDelay, Action<bool> setMinimizeToTray, Func<string, bool>? confirm = null)
     {
         this.settings = settings; this.layout = layout; this.save = save;
+        this.confirm = confirm ?? (message => ThemedMessageBox.Show(this, message, "HoverDeck setup", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes);
         Text = "HoverDeck setup"; ClientSize = new(860, 560); StartPosition = FormStartPosition.CenterParent; FormBorderStyle = FormBorderStyle.FixedDialog; MinimizeBox = MaximizeBox = false;
         Font = new("Segoe UI", 10); BackColor = AppTheme.Surface; ForeColor = AppTheme.Ink;
         var main = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new(30, 24, 30, 20) };
         main.RowStyles.Add(new(SizeType.AutoSize)); main.RowStyles.Add(new(SizeType.AutoSize)); main.RowStyles.Add(new(SizeType.Percent, 100)); main.RowStyles.Add(new(SizeType.Absolute, 48));
         main.Controls.Add(caption, 0, 0); main.Controls.Add(heading, 0, 1); main.Controls.Add(pages, 0, 2);
-        var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = Padding.Empty };
-        footer.ColumnStyles.Add(new(SizeType.AutoSize)); footer.ColumnStyles.Add(new(SizeType.Percent, 100)); footer.ColumnStyles.Add(new(SizeType.AutoSize));
-        back.Anchor = AnchorStyles.Left | AnchorStyles.Bottom; next.Anchor = AnchorStyles.Right | AnchorStyles.Bottom; AppTheme.Primary(next);
-        footer.Controls.Add(back, 0, 0); footer.Controls.Add(next, 2, 0); main.Controls.Add(footer, 0, 3);
+        var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = Padding.Empty };
+        footer.ColumnStyles.Add(new(SizeType.AutoSize)); footer.ColumnStyles.Add(new(SizeType.Percent, 100)); footer.ColumnStyles.Add(new(SizeType.AutoSize)); footer.ColumnStyles.Add(new(SizeType.AutoSize));
+        back.Anchor = AnchorStyles.Left | AnchorStyles.Bottom; skip.Anchor = next.Anchor = AnchorStyles.Right | AnchorStyles.Bottom; skip.Margin = new(0, 0, 10, 0); AppTheme.Primary(next);
+        footer.Controls.Add(back, 0, 0); footer.Controls.Add(skip, 2, 0); footer.Controls.Add(next, 3, 0); main.Controls.Add(footer, 0, 3);
         Controls.Add(main); Controls.Add(rail);
 
         steps.Add(Page(
             Para("HoverDeck starts all your WoW clients with one click and puts each window exactly where you want it."),
-            Para("With hover focus on, you can type into any WoW window just by pointing at it with the mouse, so you never have to click to switch between clients."),
-            Note("This takes about two minutes. Everything can be changed later in Settings, and this guide is there too: Settings → Setup guide.")));
+            Para("With hover focus turned on, a WoW client gets your keyboard as soon as you move the mouse over it, so you can switch between clients without clicking."),
+            Para("Setup takes about two minutes. Everything can be changed later in Settings, where you also find this guide again (Settings → Setup guide).", AppTheme.Caption)));
         steps.Add(BattleNetStep());
-        steps.Add(ClientsStep());
+        steps.Add(BuildClientsStep());
         steps.Add(HoverStep(hotkeyText, chooseHotkey, setDelay));
         steps.Add(MinimizeStep(setMinimizeToTray));
-        steps.Add(Page(
-            Note("1   Press Start clients to open every client and move it into place. Battle.net is opened for you if needed."),
-            Note("2   Drag a client on the map to move it, or drag its bottom-right corner to resize it. Edit client changes its account."),
-            Note("3   Turn on Hover focus above Start clients: point at a WoW window and type, no clicking needed."),
-            Para("You can open this guide again from Settings → Setup guide.", AppTheme.Caption)));
         foreach (var step in steps) { step.Dock = DockStyle.Fill; step.Visible = false; pages.Controls.Add(step); }
 
         rail.StepClicked += GoTo;
         back.Click += (_, _) => { if (current == 0) { DialogResult = DialogResult.Cancel; Close(); } else GoTo(current - 1); };
-        next.Click += (_, _) => { if (current < steps.Count - 1) GoTo(current + 1); else if (ValidClients()) { DialogResult = DialogResult.OK; Close(); } };
+        next.Click += (_, _) => Next();
+        skip.Click += (_, _) =>
+        {
+            if (!this.confirm("Without clients set up, Start clients can't open any WoW.\n\nYou can set them up after this guide: select a client and choose Edit client.\n\nSkip setting up clients for now?")) return;
+            clientsSkipped = true; GoTo(ClientsStep + 1);
+        };
         AcceptButton = next;
         DialogFrame.Apply(this); GoTo(0);
     }
+
+    private void Next()
+    {
+        if (current == 1 && Accounts.Count == 0
+            && !confirm("You're not signed in to Battle.net.\n\nWithout it, HoverDeck can't start Blizzard's WoW versions for you. You can still set up private-server clients, and sign in later in Settings → Battle.net connections.\n\nContinue without signing in?")) return;
+        if (current == ClientsStep) { if (ClientsProblem() is { } problem) { ShowProblem(problem); return; } clientsSkipped = false; }
+        if (current < steps.Count - 1) { GoTo(current + 1); return; }
+        if (ClientsChanged && ClientsProblem() is { } unfinished) { GoTo(ClientsStep); ShowProblem(unfinished); return; }
+        DialogResult = DialogResult.OK; Close();
+    }
+    private void ShowProblem(string problem) { clientNote.Text = problem; clientNote.ForeColor = Problem; }
 
     private void GoTo(int step)
     {
         current = step; rail.GoTo(step);
         for (int i = 0; i < steps.Count; i++) steps[i].Visible = i == step;
         caption.Text = $"STEP {step + 1} OF {steps.Count}";
-        heading.Text = step switch { 0 => "Welcome to HoverDeck", 1 => "Connect your Battle.net account", 2 => "Set up your clients", 3 => "Hover focus", 4 => "When you minimize HoverDeck", _ => "You're ready" };
+        heading.Text = step switch { 0 => "Welcome to HoverDeck", 1 => "Connect your Battle.net account", 2 => "Set up your clients", 3 => "Hover focus", _ => "When you minimize HoverDeck" };
         back.Text = step == 0 ? "Skip setup" : "Back";
         next.Text = step == 0 ? "Get started" : step == steps.Count - 1 ? "Finish" : "Next";
-        if (step == 2) FillClients();
+        skip.Visible = step == ClientsStep;
+        if (step == 1) ShowAccounts();
+        if (step == ClientsStep) FillClients();
     }
 
-    // Battle.net: sign in on Blizzard's website (the same window as Settings → Battle.net connections).
+    // Sign in on Blizzard's website (the same window as Settings → Battle.net connections); the accounts are imported by itself.
+    private async Task Connect(Button button, Label status)
+    {
+        button.Enabled = back.Enabled = next.Enabled = skip.Enabled = false; status.Text = "Sign in on Blizzard's page. Your WoW accounts are imported as soon as you're signed in."; status.ForeColor = AppTheme.Ink;
+        try
+        {
+            var connection = settings.BattleNetConnections.FirstOrDefault() ?? new BattleNetConnection { Name = "Battle.net" };
+            var imported = await BattleNetWebForm.Fetch(this, connection, true);
+            if (imported is not null)
+            {
+                if (!settings.BattleNetConnections.Contains(connection)) settings.BattleNetConnections.Add(connection);
+                BattleNetConnectionSettings.ApplyImport(connection, imported); save();
+            }
+        }
+        catch (Exception ex) { if (!IsDisposed) { status.Text = ex.Message; status.ForeColor = Problem; return; } }
+        finally { if (!IsDisposed) button.Enabled = back.Enabled = next.Enabled = skip.Enabled = true; }
+        if (IsDisposed) return;
+        if (current == 1) ShowAccounts(); else FillClients();
+    }
+    private void ShowAccounts()
+    {
+        var accounts = Accounts;
+        battleNetStatus.Text = accounts.Count == 0 ? "Not signed in yet." : $"✓  Signed in · {accounts.Count} WoW account{(accounts.Count == 1 ? "" : "s")}: " + string.Join(", ", accounts.Select(a => a.Label));
+        battleNetStatus.ForeColor = AppTheme.Ink;
+        connectStep.Text = accounts.Count == 0 ? "Connect Battle.net…" : "Sign in again…";
+    }
     private Control BattleNetStep()
     {
-        var connect = new Button { Text = "Connect Battle.net…", Width = 220, Height = 38, Name = "GuideConnectBattleNet", Margin = new(0, 4, 0, 12) }; AppTheme.Primary(connect);
-        var status = Note(""); status.Name = "GuideBattleNetStatus";
-        void ShowAccounts()
-        {
-            var accounts = settings.BattleNetConnections.SelectMany(c => c.Accounts).ToList();
-            status.Text = accounts.Count == 0 ? "Not connected yet." : $"Connected · {accounts.Count} WoW account{(accounts.Count == 1 ? "" : "s")}: " + string.Join(", ", accounts.Select(a => a.Label));
-            connect.Text = accounts.Count == 0 ? "Connect Battle.net…" : "Sign in again…";
-        }
-        connect.Click += async (_, _) =>
-        {
-            connect.Enabled = back.Enabled = next.Enabled = false; status.Text = "Sign in on Blizzard's page. Your WoW accounts are imported as soon as you're signed in.";
-            try
-            {
-                var connection = settings.BattleNetConnections.FirstOrDefault() ?? new BattleNetConnection { Name = "Battle.net" };
-                var imported = await BattleNetWebForm.Fetch(this, connection, true);
-                if (imported is not null)
-                {
-                    if (!settings.BattleNetConnections.Contains(connection)) settings.BattleNetConnections.Add(connection);
-                    BattleNetConnectionSettings.ApplyImport(connection, imported); save();
-                }
-                if (!IsDisposed) ShowAccounts();
-            }
-            catch (Exception ex) { if (!IsDisposed) status.Text = ex.Message; }
-            finally { if (!IsDisposed) connect.Enabled = back.Enabled = next.Enabled = true; }
-        };
-        ShowAccounts();
+        AppTheme.Primary(connectStep); battleNetStatus.Name = "GuideBattleNetStatus";
+        connectStep.Click += async (_, _) => await Connect(connectStep, battleNetStatus);
         return Page(
-            Para("Sign in once on Blizzard's website so HoverDeck can list your WoW accounts. Your password goes to Blizzard only; HoverDeck never sees it. The Battle.net app doesn't need to be open."),
-            connect, status,
+            Para("Sign in once on Blizzard's website so HoverDeck can list your WoW accounts. Your password goes to Blizzard only; HoverDeck never sees it."),
+            connectStep, battleNetStatus,
             Para("Only playing on private servers? Choose Next and pick Private server on the next step.", AppTheme.Caption));
     }
 
     // Clients: Battle.net first, with the versions found on this PC and the imported accounts.
-    private Control ClientsStep()
+    private Control BuildClientsStep()
     {
         battleNetCard.Selected = true;
         foreach (var card in new[] { battleNetCard, privateCard }) card.Click += (_, _) => { battleNetCard.Selected = card == battleNetCard; privateCard.Selected = card == privateCard; clientsChanged = true; FillClients(); };
@@ -135,8 +158,8 @@ internal sealed class SetupGuideForm : Form
             if (picker.ShowDialog(this) == DialogResult.OK) { gameFile.Text = picker.FileName; clientsChanged = true; }
         };
         gameFile.TextChanged += (_, _) => { if (!filling) clientsChanged = true; };
-        var privateRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Name = "GuidePrivateRow", Margin = new(0, 4, 0, 0) }; privateRow.Controls.AddRange(new Control[] { gameFile, browse });
-        var addFolder = new Button { Text = "Add WoW folder…", Width = 170, Height = 32, Name = "GuideAddFolder", Margin = new(0, 0, 0, 6) };
+        privateRow.Controls.AddRange(new Control[] { gameFile, browse });
+        AppTheme.Primary(connectHere); connectHere.Click += async (_, _) => await Connect(connectHere, clientNote);
         addFolder.Click += async (_, _) =>
         {
             using var picker = new FolderBrowserDialog { Description = "Choose your World of Warcraft folder", UseDescriptionForTitle = true, ShowNewFolderButton = false };
@@ -145,58 +168,57 @@ internal sealed class SetupGuideForm : Form
             var found = await Task.Run(() => WoWInstallationScanner.Scan(folders)); if (IsDisposed) return;
             settings.WoWLibrary.Folders = folders; settings.WoWLibrary.Installations = found.Installations; settings.WoWLibrary.RootFoldersInitialized = true; save(); FillClients();
         };
-        rows.Tag = privateRow; addFolder.Tag = "add-folder";
-        var page = Page(cards, countRow, clientNote, addFolder, rows, privateRow);
         filling = true; count.Value = Math.Clamp(layout.Slots.Count, 1, 32); gameFile.Text = layout.Executable; filling = false;
-        return page;
+        return Page(cards, countRow, clientNote, connectHere, addFolder, rows, privateRow);
     }
     private sealed record AccountItem(BattleNetConnection Connection, WoWLicense License, bool ShowLogin)
     {
         public override string ToString() => License.Label + (ShowLogin ? " · " + Connection.Name : "");
     }
+    // Rebuilds the client rows (after signing in, adding a folder or changing the count), keeping what was already picked.
     private void FillClients()
     {
         filling = true;
+        var picked = clientRows.Select(r => (Version: r.Version.SelectedItem as WoWInstallation, Account: r.Account.SelectedItem as AccountItem)).ToList();
         var installations = settings.WoWLibrary.Installations;
-        // The login's name is shown only when accounts come from more than one Battle.net login.
-        bool severalLogins = settings.BattleNetConnections.Count(c => c.Accounts.Count > 0) > 1;
+        bool severalLogins = settings.BattleNetConnections.Count(c => c.Accounts.Count > 0) > 1; // the login's name only when it tells accounts apart
         var accounts = settings.BattleNetConnections.SelectMany(c => c.Accounts.Select(a => new AccountItem(c, a, severalLogins))).ToList();
         bool battleNet = battleNetCard.Selected;
-        var addFolder = steps.Count > 2 ? steps[2].Controls.OfType<Button>().First(b => Equals(b.Tag, "add-folder")) : null;
-        if (rows.Tag is Control privateRow) privateRow.Visible = !battleNet;
-        rows.Visible = battleNet && installations.Count > 0;
-        if (addFolder is not null) addFolder.Visible = battleNet && installations.Count == 0;
+        privateRow.Visible = !battleNet;
+        connectHere.Visible = battleNet && accounts.Count == 0;
+        addFolder.Visible = battleNet && accounts.Count > 0 && installations.Count == 0;
+        rows.Visible = battleNet && installations.Count > 0 && accounts.Count > 0;
+        clientNote.ForeColor = Body;
         clientNote.Text = !battleNet ? "All clients start this game file. You can give a client its own file and a saved login later in Edit client."
+            : accounts.Count == 0 ? "Sign in to Battle.net to choose a WoW account for each client."
             : installations.Count == 0 ? "No World of Warcraft was found on this PC. If it is installed, choose its folder:"
-            : accounts.Count == 0 ? "Connect Battle.net on the previous step to choose an account for each client. You can also do it later in Edit client."
             : "Pick the WoW version and account for each client. Positions are set on the map afterwards.";
-        while (clientRows.Count < count.Value)
+        rows.Controls.Clear(); clientRows.Clear();
+        for (int index = 0; index < ClientCount; index++)
         {
-            int index = clientRows.Count;
-            var version = new DarkComboBox { Width = 250, Name = "GuideVersion" + index }; var account = new DarkComboBox { Width = 230, Name = "GuideAccount" + index };
-            version.SelectedIndexChanged += (_, _) => { if (!filling) clientsChanged = true; };
-            // The version name alone; the folder only when two installed copies share a version.
-            version.FormattingEnabled = true; version.Format += (_, e) => { if (e.ListItem is WoWInstallation i) e.Value = i.GameVersion + (installations.Count(x => x.GameVersion == i.GameVersion) > 1 ? " · " + i.RootFolder : ""); }; account.SelectedIndexChanged += (_, _) => { if (!filling) clientsChanged = true; };
+            var version = new DarkComboBox { Width = 250, Name = "GuideVersion" + index }; var account = new DarkComboBox { Width = 230, Name = "GuideAccount" + index, Margin = new(10, 0, 0, 0) };
+            version.FormattingEnabled = true; version.Format += (_, e) => { if (e.ListItem is WoWInstallation i) e.Value = i.GameVersion + (installations.Count(x => x.GameVersion == i.GameVersion) > 1 ? " · " + i.RootFolder : ""); };
+            version.Items.AddRange(installations.Cast<object>().ToArray()); account.Items.AddRange(accounts.Cast<object>().ToArray());
+            // What was picked here before, otherwise what the layout's client uses, otherwise the first version and the next account.
+            var existing = index < layout.Slots.Count ? layout.Slots[index].BattleNet : null;
+            version.SelectedItem = index < picked.Count && picked[index].Version is { } v && installations.Contains(v) ? v
+                : installations.FirstOrDefault(i => existing is not null && Matching.SamePath(i.Executable, existing.Executable)) ?? installations.FirstOrDefault();
+            account.SelectedItem = index < picked.Count && picked[index].Account is { } a && accounts.Contains(a) ? a
+                : accounts.FirstOrDefault(x => existing is not null && x.Connection.Id == existing.ConnectionId && x.License.Id == existing.WebAccountId) ?? (index < accounts.Count ? accounts[index] : null);
+            version.SelectedIndexChanged += (_, _) => { if (!filling) clientsChanged = true; }; account.SelectedIndexChanged += (_, _) => { if (!filling) clientsChanged = true; };
             var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new(0, 0, 0, 8) };
             row.Controls.Add(new Label { Text = $"Client {index + 1}", Width = 80, ForeColor = AppTheme.Ink, Margin = new(0, 6, 8, 0) }); row.Controls.Add(version); row.Controls.Add(account);
-            account.Margin = new(10, 0, 0, 0); rows.Controls.Add(row); clientRows.Add((version, account));
-            // Start from what the layout's client already uses, otherwise the first version and the next unused account.
-            var existing = index < layout.Slots.Count ? layout.Slots[index].BattleNet : null;
-            version.Items.AddRange(installations.Cast<object>().ToArray());
-            version.SelectedItem = installations.FirstOrDefault(i => existing is not null && Matching.SamePath(i.Executable, existing.Executable)) ?? installations.FirstOrDefault();
-            account.Items.AddRange(accounts.Cast<object>().ToArray());
-            account.SelectedItem = accounts.FirstOrDefault(a => existing is not null && a.Connection.Id == existing.ConnectionId && a.License.Id == existing.WebAccountId) ?? (index < accounts.Count ? accounts[index] : null);
+            rows.Controls.Add(row); clientRows.Add((version, account));
         }
-        for (int i = 0; i < rows.Controls.Count; i++) rows.Controls[i].Visible = i < count.Value;
         filling = false;
     }
-    private bool ValidClients()
+    // Next works only once every client can start: a version and an account each, or the private server's game file.
+    private string? ClientsProblem()
     {
-        if (!ClientsChanged) return true;
-        string? problem = UsePrivateServer ? (File.Exists(PrivateGame) ? null : "Choose the game file of your private server on the Clients step.")
-            : null; // Battle.net clients without a version or account stay to be finished in Edit client.
-        if (problem is null) return true;
-        GoTo(2); clientNote.Text = problem; return false;
+        if (UsePrivateServer) return File.Exists(PrivateGame) ? null : "Choose the game file of your private server, or Skip for now.";
+        if (Accounts.Count == 0) return "Sign in to Battle.net first, or Skip for now.";
+        if (settings.WoWLibrary.Installations.Count == 0) return "Add your World of Warcraft folder first, or Skip for now.";
+        return Clients.Any(c => c.Installation is null || c.Account is null) ? "Choose a WoW version and an account for every client, or Skip for now." : null;
     }
 
     private Control HoverStep(Func<string> hotkeyText, Action chooseHotkey, Action<int> setDelay)
@@ -208,19 +230,19 @@ internal sealed class SetupGuideForm : Form
         var shortcutRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new(0, 0, 0, 10) };
         shortcutRow.Controls.Add(Para("Shortcut to turn it on and off", AppTheme.Muted, new(0, 8, 12, 0))); shortcutRow.Controls.Add(shortcut);
         var delayRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
-        delayRow.Controls.Add(Para("Delay before focus moves (milliseconds)", AppTheme.Muted, new(0, 6, 12, 0))); delayRow.Controls.Add(new FieldBox(delay, 90));
+        delayRow.Controls.Add(Para("Switch delay (milliseconds)", AppTheme.Muted, new(0, 6, 12, 0))); delayRow.Controls.Add(new FieldBox(delay, 90));
         return Page(
-            Para("Point at a WoW window and it gets keyboard focus, without clicking and without moving it to the front. Turn it on and off with the switch above Start clients or with your shortcut."),
+            Para("With hover focus turned on, a WoW client gets your keyboard as soon as you move the mouse over it. Turn it on and off with the switch above Start clients or with your shortcut."),
             shortcutRow, delayRow,
-            Para("A short delay stops focus from jumping while the mouse crosses another window. 50 ms suits most people.", AppTheme.Caption, new(0, 12, 0, 0)));
+            Para("The switch delay is how long the mouse has to rest on a client before it gets your keyboard. 0 switches instantly; 10 is a good start. Raise it if focus changes when you only pass over a client.", AppTheme.Caption, new(0, 12, 0, 0)));
     }
 
     private Control MinimizeStep(Action<bool> setMinimizeToTray)
     {
-        var tray = new ChoiceCard("Notification area", "Hides next to the clock. Open it again from the HoverDeck icon there.") { Name = "GuideTray", Selected = settings.MinimizeToTray, Margin = new(0, 0, 12, 0) };
-        var taskbar = new ChoiceCard("Taskbar", "Minimizes like a normal window.") { Name = "GuideTaskbar", Selected = !settings.MinimizeToTray, Margin = Padding.Empty };
-        foreach (var card in new[] { tray, taskbar }) card.Click += (_, _) => { tray.Selected = card == tray; taskbar.Selected = card == taskbar; settings.MinimizeToTray = tray.Selected; setMinimizeToTray(tray.Selected); save(); };
-        var cards = new FlowLayoutPanel { AutoSize = true, WrapContents = false }; cards.Controls.AddRange(new Control[] { tray, taskbar });
+        var taskbar = new ChoiceCard("Taskbar", "Minimizes like a normal window.") { Name = "GuideTaskbar", Selected = !settings.MinimizeToTray, Margin = new(0, 0, 12, 0) };
+        var tray = new ChoiceCard("Notification area", "Hides next to the clock. Open it again from the HoverDeck icon there.") { Name = "GuideTray", Selected = settings.MinimizeToTray, Margin = Padding.Empty };
+        foreach (var card in new[] { taskbar, tray }) card.Click += (_, _) => { tray.Selected = card == tray; taskbar.Selected = card == taskbar; settings.MinimizeToTray = tray.Selected; setMinimizeToTray(tray.Selected); save(); };
+        var cards = new FlowLayoutPanel { AutoSize = true, WrapContents = false }; cards.Controls.AddRange(new Control[] { taskbar, tray });
         return Page(Para("HoverDeck keeps working in the background either way: clients stay in place and hover focus keeps running."), cards);
     }
 
@@ -231,8 +253,6 @@ internal sealed class SetupGuideForm : Form
     }
     private static Label Para(string text, Color? color = null, Padding? margin = null) =>
         new() { Text = text, AutoSize = true, MaximumSize = new(560, 0), ForeColor = color ?? Body, Margin = margin ?? new(0, 0, 0, 12) };
-    private static Label Note(string text) =>
-        new() { Text = text, AutoSize = true, MaximumSize = new(560, 0), MinimumSize = new(560, 0), ForeColor = AppTheme.Ink, BackColor = AppTheme.Field, Padding = new(12, 10, 12, 10), Margin = new(0, 0, 0, 8) };
 
     // Writes the guide's client choices into the layout. Unchanged Battle.net clients keep their saved
     // launch state; changed ones start fresh. New clients come from newSlot (default size and position).

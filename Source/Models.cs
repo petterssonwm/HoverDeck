@@ -37,9 +37,9 @@ public sealed class Layout
 }
 public sealed class Settings
 {
-    public int DelayMs { get; set; } = 50;
+    public int DelayMs { get; set; } = 10;
     // True: minimizing hides HoverDeck to the notification area. False: a normal taskbar minimize.
-    public bool MinimizeToTray { get; set; } = true;
+    public bool MinimizeToTray { get; set; } = false;
     public uint HotkeyModifiers { get; set; } = 3;
     public int HotkeyKey { get; set; } = (int)Keys.H;
     public string ActiveLayout { get; set; } = "My WoW layout";

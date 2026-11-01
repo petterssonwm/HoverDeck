@@ -31,7 +31,7 @@ If you run more than one WoW client at a time (multiboxing, or just keeping an a
 - **Edit or delete any client** from its right-click menu or the client editor.
 - **Close or restart all clients** from the arrow on *Start clients*.
 - **Arrange your Windows displays** (monitor positions and primary display) from inside HoverDeck, with a 20-second "keep or revert" safety net.
-- **Minimize your way.** Minimize to the notification area (default) or to the taskbar like any other window.
+- **Minimize your way.** Minimize to the taskbar like any other window (default) or to the notification area.
 - **Automatic updates.** HoverDeck checks for new releases when it starts and asks before updating, whether you installed it or use the portable ZIP.
 
 HoverDeck only places windows, manages focus and starts clients. It does not broadcast keystrokes to multiple clients or automate gameplay. It is a fan-made tool, not affiliated with or endorsed by Blizzard Entertainment. Make sure your use follows the rules of the game or server you play on.
