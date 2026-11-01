@@ -94,6 +94,7 @@ internal sealed class ClientLaunchForm : Form
             if (selected is null && path.Length > 0) { selected = new() { Executable = path, Product = profile.Product, GameVersion = profile.GameVersion, Build = "saved selection", RootFolder = WoWInstallationScanner.RootForExecutable(path) ?? "" }; installation.Items.Add(selected); }
             installation.SelectedItem = selected; if (selected is null && installation.Items.Count == 1) installation.SelectedIndex = 0;
             if (installation.SelectedItem is WoWInstallation current) { versionName.Text = current.GameVersion; if (profile.GameVersion.Length > 0 && Matching.SamePath(path, current.Executable)) versionName.Text = profile.GameVersion; }
+            if (installation.Items.Count == 0) info.Text = "No installed World of Warcraft was found on this PC. Add your World of Warcraft folder in Settings → WoW folders, then edit this client again.";
         }
         void PopulateAccounts(string selectedId, string selectedLabel)
         {
@@ -148,7 +149,7 @@ internal sealed class ClientLaunchForm : Form
         };
         FormClosing += (_, _) => cancellation.Cancel(); FormClosed += (_, _) => { if (!reading) cancellation.Dispose(); };
         PopulateInstallations(profile.Executable); PopulateConnections(profile.ConnectionId); PopulateAccounts(profile.WebAccountId, profile.AccountName); ShowMethod(); legacyRefresh.Visible = connection.SelectedItem is string; loading = false;
-        info.Text = "Choose how this client starts. Shared setup lives in Settings.";
+        if (installation.Items.Count > 0) info.Text = "Choose how this client starts. Shared setup lives in Settings.";
     }
     private static Label Label(string text, int height = 25, int width = 570) => new() { Text = text, Width = width, Height = height, ForeColor = Color.FromArgb(200, 206, 216), Margin = new(0, 0, 0, 4) };
     private static ComboBox Combo(string name) => new DarkComboBox { Name = name, Width = 570, Margin = new(0, 0, 0, 12) };

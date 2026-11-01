@@ -36,7 +36,7 @@ internal sealed class WoWFoldersForm : Form
         add.Click += async (_, _) => { using var picker = new FolderBrowserDialog { Description = "Choose the World of Warcraft folder — all versions inside will be detected", UseDescriptionForTitle = true, ShowNewFolderButton = false, SelectedPath = folders.Items.Cast<string>().FirstOrDefault() ?? "" }; if (picker.ShowDialog(this) == DialogResult.OK) { Add(picker.SelectedPath); await Scan(); } };
         remove.Click += async (_, _) => { if (folders.SelectedIndex >= 0) { folders.Items.RemoveAt(folders.SelectedIndex); await Scan(); } };
         scan.Click += async (_, _) => await Scan();
-        detect.Click += async (_, _) => { foreach (string executable in BattleNetInstallation.GameExecutables()) { string dir = Path.GetDirectoryName(executable)!; Add(File.Exists(Path.Combine(dir, ".build.info")) ? dir : Directory.GetParent(dir)?.FullName ?? dir); } await Scan(); };
+        detect.Click += async (_, _) => { foreach (string root in await Task.Run(WoWInstallationScanner.DetectedRoots)) Add(root); await Scan(); };
         save.Click += (_, _) => { library.Folders = folders.Items.Cast<string>().ToList(); library.Installations = discovered; library.RootFoldersInitialized = true; DialogResult = DialogResult.OK; Close(); };
         Shown += async (_, _) => await Scan();
         foreach (var button in actions.Controls.Cast<Button>().Concat(bottom.Controls.Cast<Button>())) button.Height = 32;

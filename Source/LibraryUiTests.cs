@@ -33,6 +33,21 @@ internal sealed class LibraryUiTests : Form
                 var advancedEditor = new ClientLaunchForm(slot, new(), settings); ((TabControl)advancedEditor.Controls.Find("ClientEditorTabs", true).Single()).SelectedIndex = 1; Render(advancedEditor, "advanced");
                 Render(new ClientLaunchForm(new Slot { Name = "Private client" }, new Layout { Executable = @"D:\Private server\Wow.exe" }, settings), "direct-client");
                 Render(new WoWFoldersForm(settings.WoWLibrary), "folders");
+                // A new PC: Battle.net connected, but no WoW folders saved yet. Edit client must still list the installed versions.
+                var newPc = new Settings { WoWLibrary = new() { RootFoldersInitialized = true }, BattleNetConnections = new() { connection } };
+                using (var fresh = new MainForm(true, newPc))
+                {
+                    await (Task)typeof(MainForm).GetMethod("RefreshWoWLibrary", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(fresh, null)!;
+                    int expected = WoWInstallationScanner.Scan(WoWInstallationScanner.DetectedRoots()).Installations.Count;
+                    if (newPc.WoWLibrary.Installations.Count != expected) throw new Exception("On a new PC, Edit client does not list the WoW versions installed on this PC.");
+                    lines.Add($"PASS: on a new PC, Edit client lists the {expected} installed WoW version(s) found automatically");
+                }
+                using (var nothing = new ClientLaunchForm(new Slot { Name = "Client 1", LaunchMethod = ClientLaunchMethod.BattleNet }, new(), new Settings()))
+                {
+                    nothing.Show(); Application.DoEvents();
+                    if (!Descendants(nothing).OfType<Label>().Any(l => l.Text.Contains("No installed World of Warcraft was found"))) throw new Exception("Edit client does not explain an empty version list.");
+                    nothing.Close(); lines.Add("PASS: with no WoW installed, Edit client says where to add the WoW folder");
+                }
                 Render(new BattleNetConnectionsForm(settings, () => { }, connection.Id), "connections");
                 var area = Native.Monitors().First(m => m.Primary).WorkArea;
                 slot.SetBounds(new(area.X, area.Y, area.Width / 2, area.Height));

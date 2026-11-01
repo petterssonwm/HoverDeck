@@ -53,10 +53,35 @@ internal static class WoWInstallationScanner
     public static List<string> LibraryRoots(WoWLibrary library, IEnumerable<string> savedExecutables)
     {
         var folders = library.Folders.Select(NormalizeRoot).ToList();
-        // Adopt an older per-slot executable once. An intentionally emptied library stays empty.
+        // Adopt an older per-slot executable once.
         if (!library.RootFoldersInitialized && folders.Count == 0)
             folders.AddRange(savedExecutables.Select(RootForExecutable).OfType<string>());
+        // A library without folders (a new PC) uses the World of Warcraft folders installed on this PC.
+        if (folders.Count == 0) folders.AddRange(DetectedRoots());
         return folders.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+    // World of Warcraft folders on this PC, from Windows' uninstall entries and Battle.net's own install
+    // list (not every WoW version has an uninstall entry). Only folders that hold an installed WoW count.
+    public static List<string> DetectedRoots()
+    {
+        var candidates = BattleNetInstallation.GameExecutables().Select(Path.GetDirectoryName).OfType<string>().ToList();
+        candidates.AddRange(BattleNetInstallation.InstallLocations());
+        try
+        {
+            var database = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Battle.net", "Agent", "product.db");
+            if (File.Exists(database))
+                candidates.AddRange(System.Text.RegularExpressions.Regex.Matches(System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(database)), @"[A-Za-z]:[\\/][\x20-\x7E]{1,250}").Select(m => m.Value));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        var roots = new List<string>();
+        foreach (var candidate in candidates)
+            try
+            {
+                string root = NormalizeRoot(candidate), metadata = Path.Combine(root, ".build.info");
+                if (File.Exists(metadata) && ReadBuilds(File.ReadLines(metadata)).Count > 0) roots.Add(root);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { }
+        return roots.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
     public static ScanResult Scan(IEnumerable<string> folders)
     {

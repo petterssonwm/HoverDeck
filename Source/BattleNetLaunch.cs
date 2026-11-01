@@ -56,9 +56,13 @@ internal sealed record BattleNetChoices(string GameTabId, string GameVersion, st
 
 internal static class BattleNetInstallation
 {
-    public static List<string> GameExecutables()
+    public static List<string> GameExecutables() => UninstallEntries().Select(e => e.Icon)
+        .Where(icon => File.Exists(icon) && Path.GetExtension(icon).Equals(".exe", StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    public static List<string> InstallLocations() => UninstallEntries().Select(e => e.Location).Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    // Windows' uninstall entries for World of Warcraft: the game executable shown as its icon and its install folder.
+    private static List<(string Icon, string Location)> UninstallEntries()
     {
-        var result = new List<string>();
+        var result = new List<(string, string)>();
         foreach (var view in new[] { RegistryView.Registry32, RegistryView.Registry64 })
         {
             using var hive = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, view);
@@ -69,12 +73,11 @@ internal static class BattleNetInstallation
                 {
                     using var key = uninstall.OpenSubKey(name);
                     if (key is null || (key.GetValue("DisplayName") as string)?.StartsWith("World of Warcraft", StringComparison.OrdinalIgnoreCase) != true) continue;
-                    var icon = (key.GetValue("DisplayIcon") as string ?? "").Trim('"').Split(",", 2)[0];
-                    if (File.Exists(icon) && Path.GetExtension(icon).Equals(".exe", StringComparison.OrdinalIgnoreCase)) result.Add(icon);
+                    result.Add(((key.GetValue("DisplayIcon") as string ?? "").Trim('"').Split(",", 2)[0], (key.GetValue("InstallLocation") as string ?? "").Trim('"')));
                 }
                 catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException) { }
         }
-        return result.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return result;
     }
     // The Battle.net tab that lists a WoW version; the product code helps when the version name is not decisive.
     public static string TabForVersion(string version, string product = "") =>

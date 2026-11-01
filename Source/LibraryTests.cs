@@ -51,7 +51,9 @@ internal static class LibraryTests
             check("Choosing Classic Era's subfolder expands to its WoW root and all siblings", WoWInstallationScanner.NormalizeRoot(classicFolder) == shared && WoWInstallationScanner.Scan(new[] { classicFolder }).Installations.Count == 3);
             string classicExecutable = Path.Combine(classicFolder, "WowClassic.exe");
             check("An older per-client executable seeds its parent WoW root once", WoWInstallationScanner.LibraryRoots(new(), new[] { classicExecutable, classicExecutable }).SequenceEqual(new[] { shared }));
-            check("Intentionally removing all roots does not re-add old installations", WoWInstallationScanner.LibraryRoots(new() { RootFoldersInitialized = true }, new[] { classicExecutable }).Count == 0);
+            var detected = WoWInstallationScanner.DetectedRoots();
+            check($"Every World of Warcraft folder detected on this PC holds an installed WoW ({detected.Count} found)", detected.All(r => WoWInstallationScanner.ReadBuilds(File.ReadLines(Path.Combine(r, ".build.info"))).Count > 0));
+            check("A library without folders (a new PC) uses the WoW folders detected on this PC, not old per-client executables", WoWInstallationScanner.LibraryRoots(new() { RootFoldersInitialized = true }, new[] { classicExecutable }).SequenceEqual(detected));
             using (var rootForm = new ClientLaunchForm(new() { LaunchMethod = ClientLaunchMethod.BattleNet }, new(), new() { WoWLibrary = new() { Folders = new() { shared }, Installations = siblings } }))
             {
                 var versionOptions = (ComboBox)rootForm.Controls.Find("BattleNetVersions", true).Single();
