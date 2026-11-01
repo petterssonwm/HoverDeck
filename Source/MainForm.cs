@@ -67,6 +67,7 @@ public sealed partial class MainForm : Form
             }
             else { toggle.Enabled = false; Log("Preview mode · hover settings are untouched."); }
             RefreshClients(); refresh.Start(); SaveNow();
+            if (!preview && settings.IsNew) BeginInvoke(async () => await ShowSetupGuide());
             if (!preview) BeginInvoke(async () => { await Task.Delay(4000); await CheckForUpdates(false); });
             Log("Ready. Select a client rectangle to edit its position. Start reuses open clients and fills missing slots.");
             Log("Window mode controls whether Fit client leaves room for the taskbar or uses the full display.");
@@ -96,7 +97,8 @@ public sealed partial class MainForm : Form
     private Slot DefaultSlot(int index)
     {
         var screen = monitors.FirstOrDefault(m => m.Primary) ?? monitors.First();
-        var r = screen.WorkArea; var s = new Slot { Name = $"Client {index + 1}" };
+        // With a Battle.net login connected, new clients start out as Battle.net clients.
+        var r = screen.WorkArea; var s = new Slot { Name = $"Client {index + 1}", LaunchMethod = settings.BattleNetConnections.Count > 0 ? ClientLaunchMethod.BattleNet : ClientLaunchMethod.Direct };
         s.SetBounds(new(r.X + (index % 2) * r.Width / 2, r.Y + (index / 2 % 2) * r.Height / 2, Math.Max(320, r.Width / 2), Math.Max(240, r.Height / 2))); return s;
     }
     private void BindProfiles()
@@ -245,7 +247,8 @@ public sealed partial class MainForm : Form
         catch (Exception ex) { Log("Could not complete layout: " + ex.Message); ThemedMessageBox.Show(this, ex.Message, "Layout needs attention", MessageBoxButtons.OK, MessageBoxIcon.Information); }
         finally { busy = false; SetWorkspaceEnabled(true); start.Visible = true; cancel.Visible = cancel.Enabled = false; mainMenu.Enabled = true; SetStatus(""); hover?.Suspend(false); launchCancellation.Dispose(); launchCancellation = null; RefreshClients(); }
     }
-    private void ChooseHotkey()
+    private void ChooseHotkey() => ChooseHotkey(this);
+    private void ChooseHotkey(IWin32Window owner)
     {
         using var dialog = new Form { Text = "Choose a global toggle shortcut", ClientSize = new(420, 150), StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false, BackColor = Surface, ForeColor = Ink, Font = Font, KeyPreview = true };
         var label = new Label { Text = "Press Ctrl / Alt / Shift plus a letter, number or function key.\nEscape cancels. The shortcut works while WoW is active.", AutoSize = false, Bounds = new(18, 20, 385, 65), ForeColor = Ink };
@@ -259,7 +262,7 @@ public sealed partial class MainForm : Form
             if (!RegisterShortcut(mods, (int)e.KeyCode)) { label.Text = "That shortcut is already in use. Try another combination."; return; }
             settings.HotkeyModifiers = mods; settings.HotkeyKey = (int)e.KeyCode; UpdateHotkeyLabel(); SaveSoon(); dialog.Close();
         };
-        dialog.ShowDialog(this);
+        dialog.ShowDialog(owner);
     }
     private string HotkeyText() => ((settings.HotkeyModifiers & 2) != 0 ? "Ctrl + " : "") + ((settings.HotkeyModifiers & 1) != 0 ? "Alt + " : "") + ((settings.HotkeyModifiers & 4) != 0 ? "Shift + " : "") + (Keys)settings.HotkeyKey;
     private bool RegisterShortcut(uint modifiers, int key)

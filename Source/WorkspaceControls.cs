@@ -254,3 +254,65 @@ internal sealed class FieldBox : Panel
         using var pen = new Pen(ContainsFocus ? Blue : FieldBorder); e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
     }
 }
+
+// The setup guide's step list: finished steps get a check, the current step is highlighted,
+// and any step already reached can be clicked to go back to it.
+internal sealed class StepRail : Control
+{
+    private const int Top0 = 20, RowHeight = 40;
+    private static readonly Font StepFont = new("Segoe UI", 9.5f), NumberFont = new("Segoe UI", 8f, FontStyle.Bold);
+    public string[] Steps { get; set; } = Array.Empty<string>();
+    public int Current { get; private set; }
+    public int Reached { get; private set; }
+    public event Action<int>? StepClicked;
+    public StepRail() { SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true); BackColor = Rail; Cursor = Cursors.Hand; }
+    public void GoTo(int step) { Current = step; Reached = Math.Max(Reached, step); Invalidate(); }
+    protected override void OnMouseClick(MouseEventArgs e)
+    {
+        int index = (e.Y - Top0) / RowHeight;
+        if (e.Y >= Top0 && index <= Reached && index != Current) StepClicked?.Invoke(index);
+        base.OnMouseClick(e);
+    }
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics; g.Clear(Rail); g.SmoothingMode = SmoothingMode.AntiAlias;
+        using (var edge = new Pen(Line)) g.DrawLine(edge, Width - 1, 0, Width - 1, Height);
+        for (int i = 0; i < Steps.Length; i++)
+        {
+            int y = Top0 + i * RowHeight; bool done = i < Current, now = i == Current;
+            if (now)
+            {
+                using var wash = new SolidBrush(Selected); g.FillRectangle(wash, 0, y, Width - 1, RowHeight);
+                using var bar = new SolidBrush(Blue); g.FillRectangle(bar, 0, y + 6, 3, RowHeight - 12);
+            }
+            var dot = new RectangleF(18, y + (RowHeight - 22) / 2f, 22, 22);
+            using (var fill = new SolidBrush(now ? Blue : done ? Color.FromArgb(29, 59, 42) : Rail)) g.FillEllipse(fill, dot);
+            using (var ring = new Pen(now ? Blue : done ? Online : FieldBorder)) g.DrawEllipse(ring, dot);
+            TextRenderer.DrawText(g, done ? "✓" : (i + 1).ToString(), NumberFont, Rectangle.Round(dot), now ? Color.White : done ? Online : Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, Steps[i], StepFont, new Rectangle(52, y, Width - 60, RowHeight), now ? Color.White : i <= Reached ? Ink : Muted, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
+    }
+}
+
+// A selectable card with a title and a short explanation, for either-or choices in the setup guide.
+internal sealed class ChoiceCard : Control
+{
+    private static readonly Font TitleFont = new("Segoe UI", 10.5f, FontStyle.Bold), DetailFont = new("Segoe UI", 9f);
+    private bool selected;
+    public string Detail { get; set; } = "";
+    public bool Selected { get => selected; set { selected = value; Invalidate(); } }
+    public ChoiceCard(string title, string detail)
+    {
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        Text = title; Detail = detail; Cursor = Cursors.Hand; Size = new(250, 82); AccessibleRole = AccessibleRole.RadioButton; AccessibleName = title;
+    }
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics; g.Clear(Parent?.BackColor ?? Surface); g.SmoothingMode = SmoothingMode.AntiAlias;
+        using var shape = Round(new RectangleF(.5f, .5f, Width - 1.5f, Height - 1.5f), 7);
+        using (var fill = new SolidBrush(selected ? Color.FromArgb(14, 39, 66) : Field)) g.FillPath(fill, shape);
+        using (var edge = new Pen(selected ? Blue : FieldBorder)) g.DrawPath(edge, shape);
+        TextRenderer.DrawText(g, Text, TitleFont, new Rectangle(14, 11, Width - 28, 22), Color.White, TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
+        TextRenderer.DrawText(g, Detail, DetailFont, new Rectangle(14, 35, Width - 28, Height - 40), selected ? Color.FromArgb(143, 198, 255) : Muted, TextFormatFlags.NoPadding | TextFormatFlags.WordBreak);
+    }
+}

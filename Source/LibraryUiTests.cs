@@ -33,6 +33,35 @@ internal sealed class LibraryUiTests : Form
                 var advancedEditor = new ClientLaunchForm(slot, new(), settings); ((TabControl)advancedEditor.Controls.Find("ClientEditorTabs", true).Single()).SelectedIndex = 1; Render(advancedEditor, "advanced");
                 Render(new ClientLaunchForm(new Slot { Name = "Private client" }, new Layout { Executable = @"D:\Private server\Wow.exe" }, settings), "direct-client");
                 Render(new WoWFoldersForm(settings.WoWLibrary), "folders");
+                // The setup guide: six steps; Clients defaults to Battle.net with the installed versions and the imported
+                // accounts in order; only looking at it changes nothing; Finish writes each client's version and account.
+                var guideLayout = new Layout { Name = "Guide", Slots = new() { new() { Name = "Client 1" }, new() { Name = "Client 2" } } };
+                using (var guide = new SetupGuideForm(settings, guideLayout, () => { }, () => "Ctrl + Alt + H", () => { }, _ => { }, _ => { }))
+                {
+                    guide.ShowInTaskbar = false; guide.Show(); Application.DoEvents();
+                    var guideNext = (Button)guide.Controls.Find("GuideNext", true).Single();
+                    for (int step = 0; step < 6; step++)
+                    {
+                        guide.Refresh();
+                        using (var shot = new Bitmap(guide.Width, guide.Height)) { guide.DrawToBitmap(shot, new Rectangle(Point.Empty, guide.Size)); shot.Save(Path.Combine(output, $"setup-step-{step + 1}.png")); }
+                        if (step == 2)
+                        {
+                            if (guide.UsePrivateServer || guide.Clients.Count != 2 || guide.Clients.Any(c => c.Installation != installation)) throw new Exception("The guide's Clients step does not default to Battle.net with the installed version.");
+                            if (guide.Clients[0].Account?.Id != "fixture-1" || guide.Clients[1].Account?.Id != "fixture-2") throw new Exception("The guide does not suggest the imported accounts in order.");
+                            if (guide.ClientsChanged) throw new Exception("Only looking at the guide's Clients step counts as a change.");
+                        }
+                        guideNext.PerformClick(); Application.DoEvents();
+                    }
+                    if (guide.DialogResult != DialogResult.OK) throw new Exception("Finish did not complete the setup guide.");
+                }
+                lines.Add("PASS: the setup guide walks through six steps; Clients defaults to Battle.net with the found versions and imported accounts, and viewing it changes nothing");
+                SetupGuideForm.ApplyClients(guideLayout, false, "", 3, new[] { new ClientChoice(installation, connection, connection.Accounts[1]), new ClientChoice(installation, connection, connection.Accounts[0]), new ClientChoice(installation, null, null) }, i => new Slot { Name = $"Client {i + 1}" });
+                if (guideLayout.Slots.Count != 3 || guideLayout.Slots.Any(s => s.LaunchMethod != ClientLaunchMethod.BattleNet) || guideLayout.Slots[0].BattleNet?.WebAccountId != "fixture-2"
+                    || guideLayout.Slots[1].BattleNet?.AccountName != "WoW1 (EU)" || guideLayout.Slots[2].BattleNet?.GameVersion != installation.GameVersion || guideLayout.Slots[2].BattleNet?.AccountName != "")
+                    throw new Exception("Finishing the guide did not give each client its chosen version and account.");
+                SetupGuideForm.ApplyClients(guideLayout, true, @"D:\Private server\Wow.exe", 1, Array.Empty<ClientChoice>(), i => new Slot());
+                if (guideLayout.Slots.Count != 1 || guideLayout.Slots[0].LaunchMethod != ClientLaunchMethod.Direct || guideLayout.Executable != @"D:\Private server\Wow.exe") throw new Exception("The guide's private-server choice was not applied.");
+                lines.Add("PASS: finishing the guide sets each client's version and account, or one private-server game for all clients");
                 // A new PC: Battle.net connected, but no WoW folders saved yet. Edit client must still list the installed versions.
                 var newPc = new Settings { WoWLibrary = new() { RootFoldersInitialized = true }, BattleNetConnections = new() { connection } };
                 using (var fresh = new MainForm(true, newPc))
@@ -170,13 +199,16 @@ internal sealed class LibraryUiTests : Form
                             dialog.DrawToBitmap(bitmap, new Rectangle(Point.Empty, dialog.Size)); bitmap.Save(Path.Combine(output, name + ".png"));
                             captured = true; timer.Stop(); dialog.Close();
                         };
-                        timer.Start(); command.PerformClick(); timer.Stop();
+                        // Some commands open their dialog only after an await (the setup guide refreshes the WoW versions first).
+                        timer.Start(); command.PerformClick(); for (int i = 0; i < 200 && !captured; i++) { Application.DoEvents(); Thread.Sleep(50); } timer.Stop();
                         if (!captured) throw new Exception("Could not open settings dialog: " + name);
                         lines.Add("PASS: opened, rendered and closed " + name + " through its menu");
                     }
-                    RenderDialog(((ToolStripMenuItem)menu.Items[1]).DropDownItems[3], "hover-settings");
+                    ToolStripItem Command(int menuIndex, string text) => ((ToolStripMenuItem)menu.Items[menuIndex]).DropDownItems.Cast<ToolStripItem>().Single(i => i.Text == text);
+                    RenderDialog(Command(1, "Hover focus…"), "hover-settings");
                     RenderDialog(((ToolStripMenuItem)menu.Items[0]).DropDownItems[4], "direct-defaults");
-                    RenderDialog(((ToolStripMenuItem)menu.Items[1]).DropDownItems[1], "connections-menu");
+                    RenderDialog(Command(1, "Battle.net connections…"), "connections-menu");
+                    RenderDialog(Command(1, "Setup guide…"), "setup-guide-menu");
                     // HoverDeck's own message box, and the frame on every dialog opened above.
                     bool framedMessage = false;
                     using (var capture = new System.Windows.Forms.Timer { Interval = 150 })

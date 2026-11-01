@@ -160,6 +160,8 @@ public sealed partial class MainForm
         layoutMenu.DropDownItems.Add("Capture open clients", null, (_, _) => CaptureWindows());
         layoutMenu.DropDownItems.Add("Direct-launch defaults…", null, (_, _) => EditDirectDefaults());
         layoutMenu.DropDownItems.Add(new ToolStripSeparator()); layoutMenu.DropDownItems.Add("Exit", null, (_, _) => Close());
+        sharedSettingsMenu.DropDownItems.Add(new ToolStripMenuItem("Setup guide…", null, async (_, _) => await ShowSetupGuide()) { Name = "SetupGuide" });
+        sharedSettingsMenu.DropDownItems.Add(new ToolStripSeparator());
         sharedSettingsMenu.DropDownItems.Add("WoW folders…", null, async (_, _) => await OpenSharedSettings(async () =>
         {
             await RefreshWoWLibrary(); using var dialog = new WoWFoldersForm(settings.WoWLibrary);
@@ -305,6 +307,23 @@ public sealed partial class MainForm
         try { await action(); }
         catch (Exception ex) { ThemedMessageBox.Show(this, ex.Message, "Settings"); }
         finally { busy = false; mainMenu.Enabled = mainArea.Enabled = start.Enabled = true; hover?.Suspend(false); UpdateSlotDetails(); RefreshClients(); }
+    }
+    // The click-through guide: opens by itself on a PC without settings, and from Settings → Setup guide.
+    private async Task ShowSetupGuide()
+    {
+        await OpenSharedSettings(async () =>
+        {
+            await RefreshWoWLibrary();
+            SetupGuideForm? shown = null; // the shortcut window opens on top of the guide
+            using var guide = shown = new SetupGuideForm(settings, layout, SaveNow, HotkeyText, () => ChooseHotkey(shown ?? (IWin32Window)this), value => hover?.SetDelay(value),
+                tray => { if (sharedSettingsMenu.DropDownItems["MinimizeToTray"] is ToolStripMenuItem item) item.Checked = tray; });
+            if (guide.ShowDialog(this) == DialogResult.OK && guide.ClientsChanged)
+            {
+                SetupGuideForm.ApplyClients(layout, guide.UsePrivateServer, guide.PrivateGame, guide.ClientCount, guide.Clients, DefaultSlot);
+                launcher.Bindings.Clear(); BindLayout(); Log($"Setup guide: {layout.Slots.Count} client{(layout.Slots.Count == 1 ? "" : "s")} set up in {layout.Name}.");
+            }
+            settings.IsNew = false; UpdateHotkeyLabel(); SaveNow();
+        });
     }
     private void ShowHoverPreferences()
     {

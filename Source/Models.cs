@@ -47,6 +47,8 @@ public sealed class Settings
     public BattleNetCatalog BattleNetCatalog { get; set; } = new();
     public WoWLibrary WoWLibrary { get; set; } = new();
     public List<BattleNetConnection> BattleNetConnections { get; set; } = new();
+    // Not saved: true when this PC had no settings yet, which is when the setup guide opens by itself.
+    [System.Text.Json.Serialization.JsonIgnore] public bool IsNew { get; set; }
 }
 public sealed record MonitorInfo(string Name, bool Primary, Rectangle Bounds, Rectangle WorkArea);
 public sealed record GameWindow(nint Handle, int ProcessId, long Started, string Executable, string Title, Rectangle Bounds, bool Minimized)
@@ -98,7 +100,7 @@ public static class Storage
     {
         // A damaged file, or one missing because a save was interrupted, falls back to the previous save.
         string backup = SettingsPath + ".bak";
-        if (!File.Exists(SettingsPath)) return File.Exists(backup) ? Normalize(Read(backup)) : new();
+        if (!File.Exists(SettingsPath)) return File.Exists(backup) ? Normalize(Read(backup)) : new() { IsNew = true };
         Settings s;
         try { s = Read(SettingsPath); }
         catch (JsonException) when (File.Exists(backup)) { s = Read(backup); }

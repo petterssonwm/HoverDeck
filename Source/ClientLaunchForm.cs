@@ -28,7 +28,9 @@ internal sealed class ClientLaunchForm : Form
         var name = new TextBox { Text = draft.Name, Width = 460, MaxLength = 80, Name = "ClientName" }; nameRow.Controls.Add(name); root.Controls.Add(nameRow, 0, 0);
         var tabs = new DarkTabControl { Dock = DockStyle.Fill, Name = "ClientEditorTabs", Padding = new(16, 7) }; root.Controls.Add(tabs, 0, 1);
         var launch = Page("Launch"); var advanced = Page("Advanced"); tabs.TabPages.Add(launch.Page);
-        launch.Body.Controls.Add(Label("Launch method")); method.Items.AddRange(new object[] { "Direct / private server", "Battle.net" }); method.SelectedIndex = (int)slot.LaunchMethod; launch.Body.Controls.Add(method);
+        // Battle.net comes first. A client nobody has set up yet (no game file anywhere) starts on Battle.net too.
+        bool untouched = slot.LaunchMethod == ClientLaunchMethod.Direct && string.IsNullOrWhiteSpace(slot.Executable) && slot.Login is null && string.IsNullOrWhiteSpace(layout.Executable);
+        launch.Body.Controls.Add(Label("Launch method")); method.Items.AddRange(new object[] { "Battle.net", "Direct / private server" }); method.SelectedIndex = slot.LaunchMethod == ClientLaunchMethod.BattleNet || untouched ? 0 : 1; launch.Body.Controls.Add(method);
         var host = new Panel { Width = 600, Height = 280, Margin = Padding.Empty }; launch.Body.Controls.Add(host);
         var direct = Body(); var bnet = Body(); host.Controls.Add(direct); host.Controls.Add(bnet);
         var useDefault = new CheckBox { Text = "Use this layout's default executable", Checked = string.IsNullOrWhiteSpace(draft.Executable), AutoSize = true, Name = "UseLayoutExecutable", Margin = new(0, 4, 0, 10) }; direct.Controls.Add(useDefault);
@@ -65,14 +67,14 @@ internal sealed class ClientLaunchForm : Form
         actions.Controls.AddRange(new Control[] { save, cancel, delete }); root.Controls.Add(actions, 0, 3); AcceptButton = save; CancelButton = cancel; AppTheme.Style(this); DialogFrame.Apply(this);
         void ShowMethod()
         {
-            bool battleNet = method.SelectedIndex == 1; bnet.Visible = battleNet; direct.Visible = !battleNet; (battleNet ? (Control)bnet : direct).BringToFront();
+            bool battleNet = method.SelectedIndex == 0; bnet.Visible = battleNet; direct.Visible = !battleNet; (battleNet ? (Control)bnet : direct).BringToFront();
             if (battleNet) { if (!tabs.TabPages.Contains(advanced.Page)) tabs.TabPages.Add(advanced.Page); }
             else tabs.TabPages.Remove(advanced.Page);
         }
         void ReadFields()
         {
             draft.Name = name.Text.Trim(); draft.Executable = useDefault.Checked ? "" : directPath.Text.Trim().Trim('"');
-            draft.LaunchMethod = (ClientLaunchMethod)method.SelectedIndex;
+            draft.LaunchMethod = method.SelectedIndex == 0 ? ClientLaunchMethod.BattleNet : ClientLaunchMethod.Direct;
             if (installation.SelectedItem is WoWInstallation selected) { profile.Executable = selected.Executable; profile.GameTabId = selected.GameTabId; profile.Product = selected.Product; }
             profile.GameVersion = versionName.Text.Trim();
             if (connection.SelectedItem is BattleNetConnection connected) { profile.ConnectionId = connected.Id; profile.ConnectionName = connected.Name; }
