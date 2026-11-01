@@ -1,3 +1,8 @@
+HoverDeck 1.7.8 verification — 2026-11-01
+
+On a new PC the installed WoW versions were not listed in Edit client: no WoW folders were saved and none were detected. A library without folders now uses the World of Warcraft folders found on the PC, from Windows' uninstall entries (game executable and install location) and Battle.net's own install list, which also covers versions without an uninstall entry; only folders holding an installed WoW count. Settings → WoW folders → Add detected folders uses the same detection, and Edit client says where to add the WoW folder when nothing is found.
+All 168 regression checks (new: every detected folder holds an installed WoW; a library without folders uses the detected folders), 21 Battle.net launch checks and all 40 UI checks passed (new: with settings like a new PC's, Edit client lists the 3 WoW versions installed on this PC; with none installed it explains where to add the folder).
+
 HoverDeck 1.7.7 verification — 2026-10-30
 
 The hover focus toggle moved from the title bar to a sliding switch directly above Start clients, joined with it in one rounded frame. The switch shows Hover focus on/off and the shortcut; while it is on, the switch, its outline and the frame around Start clients turn the launcher blue. The switch and Start clients each draw their half of the outline, so the corners stay round; Cancel has matching rounded bottom corners. The tray menu and the global shortcut toggle it as before.
