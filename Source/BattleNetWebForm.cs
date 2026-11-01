@@ -14,7 +14,7 @@ internal sealed class BattleNetWebForm : Form
     private readonly TaskCompletionSource<BattleNetAccountData.ImportResult> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private BattleNetAccountData.ImportResult? result;
     private Exception? failure;
-    private bool initialized, reading, expectingImport, closing, closeApproved;
+    private bool initialized, reading, expectingImport, closing, closeApproved, signedIn;
     private readonly System.Windows.Forms.Timer timeout = new() { Interval = 45000 };
     protected override bool ShowWithoutActivation => !interactive;
     internal bool ResponseViewVisible => browser.Visible;
@@ -31,15 +31,21 @@ internal sealed class BattleNetWebForm : Form
         var import = new Button { Name = "ImportAccounts", Text = "Finish connection — import WoW accounts", AutoSize = true, Height = 36, Enabled = false }; actions.Controls.AddRange(new Control[] { signIn, import });
         var host = new Panel { Dock = DockStyle.Fill }; host.Controls.Add(browser); host.Controls.Add(notice);
         root.Controls.Add(actions, 0, 0); root.Controls.Add(host, 0, 1); root.Controls.Add(status, 0, 2);
-        status.Text = "Sign in on Blizzard's website, then choose Finish connection above.";
+        status.Text = "Sign in on Blizzard's website. When you're signed in, choose Finish connection above.";
         void HideResponse(string message) { browser.Visible = false; notice.Text = message; notice.Visible = true; notice.BringToFront(); }
+        // Signed in: Blizzard's account page is not needed, so it is replaced by what to do next, and only now can the import start.
+        void ShowSignedIn()
+        {
+            HideResponse("✓  You're signed in to Battle.net.\n\nChoose \u201cFinish connection — import WoW accounts\u201d above to bring in your WoW accounts.");
+            status.Text = "Signed in. Choose Finish connection above.";
+        }
         void BeginImport()
         {
             if (!initialized || reading || closing) return;
             expectingImport = true; HideResponse("Importing your WoW account names and regions…");
             status.Text = "Reading licenses. The raw account response is hidden."; timeout.Start(); browser.CoreWebView2.Navigate(AccountsUrl);
         }
-        signIn.Click += (_, _) => { if (initialized && !reading && !closing) { expectingImport = false; timeout.Stop(); HideResponse("Opening Blizzard sign-in…"); browser.CoreWebView2.Navigate(SignInUrl); } };
+        signIn.Click += (_, _) => { if (initialized && !reading && !closing) { expectingImport = false; signedIn = false; import.Enabled = false; timeout.Stop(); HideResponse("Opening Blizzard sign-in…"); browser.CoreWebView2.Navigate(SignInUrl); } };
         import.Click += (_, _) => BeginImport();
         timeout.Tick += (_, _) => Fail("The account request timed out. Return to Blizzard sign-in and try again.");
         Shown += async (_, _) =>
@@ -71,8 +77,10 @@ internal sealed class BattleNetWebForm : Form
                         if (!interactive) { Fail("This connection needs you to sign in again. Use Sign in / import in Battle.net connections."); return; }
                         if (Uri.TryCreate(core.Source, UriKind.Absolute, out var current) && !current.AbsolutePath.StartsWith("/api/", StringComparison.OrdinalIgnoreCase))
                         {
-                            notice.Visible = false; browser.Visible = true; browser.BringToFront();
-                            if (expectingImport) { expectingImport = false; timeout.Stop(); status.Text = "Complete Blizzard sign-in, then choose Finish connection."; }
+                            if (expectingImport) { expectingImport = false; timeout.Stop(); }
+                            signedIn = IsSignedInPage(core.Source); import.Enabled = signedIn;
+                            if (signedIn) ShowSignedIn();
+                            else { notice.Visible = false; browser.Visible = true; browser.BringToFront(); status.Text = "Sign in on Blizzard's website. When you're signed in, choose Finish connection above."; }
                         }
                         return;
                     }
@@ -88,11 +96,11 @@ internal sealed class BattleNetWebForm : Form
                         result = BattleNetAccountData.ParseDetailed(projected); timeout.Stop(); Close();
                     }
                     catch (Exception ex) { Fail(ex is InvalidOperationException ? ex.Message : "The account list could not be read. Return to sign-in and try again."); }
-                    finally { reading = false; if (!IsDisposed && !closing) import.Enabled = signIn.Enabled = true; }
+                    finally { reading = false; if (!IsDisposed && !closing) { signIn.Enabled = true; import.Enabled = signedIn; } }
                 };
                 // Removes cached API pages left by older releases without reading them or clearing sign-in cookies.
                 await ClearCachedPages(core);
-                if (IsDisposed || closing) return; initialized = true; import.Enabled = signIn.Enabled = true;
+                if (IsDisposed || closing) return; initialized = true; signIn.Enabled = true; // Finish connection waits until you're signed in
                 if (interactive) core.Navigate(SignInUrl); else BeginImport();
             }
             catch (WebView2RuntimeNotFoundException) { Fail("Microsoft Edge WebView2 Runtime is required. Install it, then reconnect."); }
@@ -154,6 +162,9 @@ internal sealed class BattleNetWebForm : Form
         catch { throw new InvalidOperationException("The saved web sign-in could not be cleared. The connection was kept; close its sign-in window and try removing it again."); }
         finally { owner.Controls.Remove(web); }
     }
+    // Any account.battle.net page except sign-in, sign-up, recovery and the data API means the sign-in is done.
+    internal static bool IsSignedInPage(string source) => Uri.TryCreate(source, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.Host == "account.battle.net"
+        && uri.AbsolutePath.Length > 1 && !new[] { "/login", "/oauth", "/creation", "/recovery", "/api/" }.Any(p => uri.AbsolutePath.StartsWith(p, StringComparison.OrdinalIgnoreCase));
     internal static bool IsAccountsPage(string source) => Uri.TryCreate(source, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.Host == "account.battle.net" && uri.IsDefaultPort && uri.AbsolutePath == "/api/games-and-subs" && uri.Query.Length == 0;
     private void Fail(string message)
     {

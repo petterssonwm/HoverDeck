@@ -51,7 +51,8 @@ internal sealed class SetupGuideForm : Form
         Controls.Add(main); Controls.Add(rail);
 
         steps.Add(Page(
-            Para("HoverDeck starts all your WoW clients with one click, puts each window exactly where you want it, and lets keyboard focus follow your mouse between them."),
+            Para("HoverDeck starts all your WoW clients with one click and puts each window exactly where you want it."),
+            Para("With hover focus on, you can type into any WoW window just by pointing at it with the mouse, so you never have to click to switch between clients."),
             Note("This takes about two minutes. Everything can be changed later in Settings, and this guide is there too: Settings → Setup guide.")));
         steps.Add(BattleNetStep());
         steps.Add(ClientsStep());

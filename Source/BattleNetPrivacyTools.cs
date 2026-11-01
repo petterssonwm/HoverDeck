@@ -77,10 +77,26 @@ internal sealed class BattleNetPrivacyTools : Form
                                 };
                             });
                         form.ShowInTaskbar = false; form.Opacity = 0; form.Show(this);
-                        for (int i = 0; i < 200 && !form.ResponseViewVisible; i++) await Task.Delay(50);
-                        if (!form.ResponseViewVisible || testCore is null) throw new Exception("Synthetic sign-in view did not become ready.");
+                        var import = (Button)form.Controls.Find("ImportAccounts", true).Single();
+                        // The window opens on the account overview, which the fixture serves as a signed-in page.
+                        for (int i = 0; i < 200 && !import.Enabled; i++) await Task.Delay(50);
+                        if (!import.Enabled || form.ResponseViewVisible || testCore is null) throw new Exception("Signing in did not hide Blizzard's account page and enable Finish connection.");
+                        // On a sign-in page the website is shown and Finish connection waits.
+                        var signInPage = new TaskCompletionSource<bool>(); void Loaded(object? s, CoreWebView2NavigationCompletedEventArgs e) => signInPage.TrySetResult(true);
+                        testCore.NavigationCompleted += Loaded; testCore.Navigate("https://account.battle.net/login/en/");
+                        await signInPage.Task.WaitAsync(TimeSpan.FromSeconds(20)); testCore.NavigationCompleted -= Loaded; await Task.Delay(100);
+                        if (import.Enabled || !form.ResponseViewVisible) throw new Exception("Finish connection was available before signing in, or the sign-in page was hidden.");
+                        var signedInAgain = new TaskCompletionSource<bool>(); void Back(object? s, CoreWebView2NavigationCompletedEventArgs e) => signedInAgain.TrySetResult(true);
+                        testCore.NavigationCompleted += Back; testCore.Navigate("https://account.battle.net/overview");
+                        await signedInAgain.Task.WaitAsync(TimeSpan.FromSeconds(20)); testCore.NavigationCompleted -= Back; await Task.Delay(100);
+                        if (!import.Enabled || form.ResponseViewVisible) throw new Exception("Returning signed in did not enable Finish connection.");
+                        if (success)
+                        {
+                            using (var picture = new Bitmap(form.Width, form.Height)) { form.DrawToBitmap(picture, new Rectangle(Point.Empty, form.Size)); picture.Save(Path.Combine(input, "signed-in.png")); }
+                            lines.Add("PASS: Finish connection is off on Blizzard's sign-in page, and turns on with the account page hidden once signed in.");
+                        }
                         testCore.NavigationStarting += (_, e) => { if (BattleNetWebForm.IsAccountsPage(e.Uri)) hiddenDuringNavigation = !form.ResponseViewVisible; };
-                        ((Button)form.Controls.Find("ImportAccounts", true).Single()).PerformClick();
+                        import.PerformClick();
                         if (form.ResponseViewVisible) throw new Exception("Import did not hide the website before navigating.");
                         if (success)
                         {
