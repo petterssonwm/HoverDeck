@@ -1,3 +1,8 @@
+HoverDeck 1.7.9 verification — 2026-11-01
+
+The portable ZIP now updates itself like the installed version: it checks for new releases at start and asks before updating, instead of refusing. Its settings moved out of the 'current' folder, which every update replaces, into a Data folder beside HoverDeck.exe; older portable copies move them there once. The README explains that HoverDeck.exe is the one to open and that Update.exe and 'current' belong to the updater.
+Verified end to end with two local test releases: a 1.7.90 portable copy with settings in its old location moved them beside HoverDeck.exe, offered the update, updated itself to 1.7.91 and restarted with the layout intact. All 168 regression checks, 21 Battle.net launch checks and all 40 UI checks passed.
+
 HoverDeck 1.7.8 verification — 2026-11-01
 
 On a new PC the installed WoW versions were not listed in Edit client: no WoW folders were saved and none were detected. A library without folders now uses the World of Warcraft folders found on the PC, from Windows' uninstall entries (game executable and install location) and Battle.net's own install list, which also covers versions without an uninstall entry; only folders holding an installed WoW count. Settings → WoW folders → Add detected folders uses the same detection, and Edit client says where to add the WoW folder when nothing is found.
