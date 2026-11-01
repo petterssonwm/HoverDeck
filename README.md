@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/petterssonwm/HoverDeck/releases/latest/download/HoverDeck-Setup.exe"><img src="https://img.shields.io/github/v/release/petterssonwm/HoverDeck?style=for-the-badge&label=Download%20HoverDeck&logo=windows&logoColor=white&color=148eff" height="48" alt="Download HoverDeck for Windows"></a><br>
+  <a href="https://github.com/petterssonwm/HoverDeck/releases/latest/download/HoverDeck-Setup.exe"><img src="https://img.shields.io/github/v/release/petterssonwm/HoverDeck?style=for-the-badge&label=Download%20HoverDeck&logo=windows&logoColor=white&color=148eff" width="380" alt="Download HoverDeck for Windows"></a><br>
   <sub>Windows installer · always the newest version · <a href="https://github.com/petterssonwm/HoverDeck/releases/latest">all downloads</a></sub>
 </p>
 
