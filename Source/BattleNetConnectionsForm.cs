@@ -75,7 +75,7 @@ internal sealed class BattleNetConnectionsForm : Form
         async Task Import(BattleNetConnection connection, bool signIn, bool newlyAdded)
         {
             if (newlyAdded) { connections.Add(connection); save(); Populate(connection.Id); }
-            status.Text = signIn ? "Complete sign-in in Blizzard's page, then import accounts." : "Refreshing this connection in the background…";
+            status.Text = signIn ? "Sign in on Blizzard's page. Your WoW accounts are imported as soon as you're signed in." : "Refreshing this connection in the background…";
             var imported = await BattleNetWebForm.Fetch(this, connection, signIn); if (IsDisposed || imported is null) return;
             BattleNetConnectionSettings.ApplyImport(connection, imported); save(); Populate(connection.Id);
             if (imported.Accounts.Count == 0) status.Text = "Connected, but Blizzard returned no WoW licenses for this login.";

@@ -96,7 +96,7 @@ internal sealed class SetupGuideForm : Form
         }
         connect.Click += async (_, _) =>
         {
-            connect.Enabled = back.Enabled = next.Enabled = false; status.Text = "Complete the sign-in on Blizzard's page, then choose Finish connection.";
+            connect.Enabled = back.Enabled = next.Enabled = false; status.Text = "Sign in on Blizzard's page. Your WoW accounts are imported as soon as you're signed in.";
             try
             {
                 var connection = settings.BattleNetConnections.FirstOrDefault() ?? new BattleNetConnection { Name = "Battle.net" };

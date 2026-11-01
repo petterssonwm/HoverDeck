@@ -64,7 +64,7 @@ internal sealed class BattleNetPrivacyTools : Form
                     lines.Add("PASS: WebView2 cache/history cleanup completed.");
                     async Task CheckImportWindow(string payload, bool success)
                     {
-                        CoreWebView2? testCore = null; bool hiddenDuringNavigation = false;
+                        CoreWebView2? testCore = null; bool hiddenDuringNavigation = false, overviewShown = false;
                         using var form = new BattleNetWebForm(new() { Name = "Synthetic login" }, true,
                             Path.Combine(input, success ? "import-success" : "import-failure"), (env, browser) =>
                             {
@@ -75,34 +75,25 @@ internal sealed class BattleNetPrivacyTools : Form
                                     string body = api ? payload : "<!doctype html><html><body>Local synthetic sign-in fixture</body></html>";
                                     e.Response = env.CreateWebResourceResponse(new MemoryStream(Encoding.UTF8.GetBytes(body)), 200, "OK", "Content-Type: " + (api ? "application/json" : "text/html") + "\r\nCache-Control: no-store");
                                 };
-                            });
+                            }, "https://account.battle.net/login/en/");
                         form.ShowInTaskbar = false; form.Opacity = 0; form.Show(this);
-                        var import = (Button)form.Controls.Find("ImportAccounts", true).Single();
-                        // The window opens on the account overview, which the fixture serves as a signed-in page.
-                        for (int i = 0; i < 200 && !import.Enabled; i++) await Task.Delay(50);
-                        if (!import.Enabled || form.ResponseViewVisible || testCore is null) throw new Exception("Signing in did not hide Blizzard's account page and enable Finish connection.");
-                        // On a sign-in page the website is shown and Finish connection waits.
-                        var signInPage = new TaskCompletionSource<bool>(); void Loaded(object? s, CoreWebView2NavigationCompletedEventArgs e) => signInPage.TrySetResult(true);
-                        testCore.NavigationCompleted += Loaded; testCore.Navigate("https://account.battle.net/login/en/");
-                        await signInPage.Task.WaitAsync(TimeSpan.FromSeconds(20)); testCore.NavigationCompleted -= Loaded; await Task.Delay(100);
-                        if (import.Enabled || !form.ResponseViewVisible) throw new Exception("Finish connection was available before signing in, or the sign-in page was hidden.");
-                        var signedInAgain = new TaskCompletionSource<bool>(); void Back(object? s, CoreWebView2NavigationCompletedEventArgs e) => signedInAgain.TrySetResult(true);
-                        testCore.NavigationCompleted += Back; testCore.Navigate("https://account.battle.net/overview");
-                        await signedInAgain.Task.WaitAsync(TimeSpan.FromSeconds(20)); testCore.NavigationCompleted -= Back; await Task.Delay(100);
-                        if (!import.Enabled || form.ResponseViewVisible) throw new Exception("Returning signed in did not enable Finish connection.");
-                        if (success)
+                        // The window opens on a sign-in page: the website is shown and nothing is imported yet.
+                        for (int i = 0; i < 200 && !form.ResponseViewVisible; i++) await Task.Delay(50);
+                        if (!form.ResponseViewVisible || testCore is null) throw new Exception("Synthetic sign-in view did not become ready.");
+                        await Task.Delay(500); if (form.Completion.IsCompleted) throw new Exception("Accounts were imported before signing in.");
+                        // Signing in lands on the account overview, which is never shown: the import starts by itself.
+                        testCore.NavigationStarting += (_, e) =>
                         {
-                            using (var picture = new Bitmap(form.Width, form.Height)) { form.DrawToBitmap(picture, new Rectangle(Point.Empty, form.Size)); picture.Save(Path.Combine(input, "signed-in.png")); }
-                            lines.Add("PASS: Finish connection is off on Blizzard's sign-in page, and turns on with the account page hidden once signed in.");
-                        }
-                        testCore.NavigationStarting += (_, e) => { if (BattleNetWebForm.IsAccountsPage(e.Uri)) hiddenDuringNavigation = !form.ResponseViewVisible; };
-                        import.PerformClick();
-                        if (form.ResponseViewVisible) throw new Exception("Import did not hide the website before navigating.");
+                            if (BattleNetWebForm.IsAccountsPage(e.Uri)) hiddenDuringNavigation = !form.ResponseViewVisible;
+                            if (BattleNetWebForm.IsSignedInPage(e.Uri) && form.ResponseViewVisible) overviewShown = true;
+                        };
+                        testCore.NavigationCompleted += (_, _) => { if (BattleNetWebForm.IsSignedInPage(testCore.Source) && form.ResponseViewVisible) overviewShown = true; };
+                        testCore.Navigate("https://account.battle.net/overview");
                         if (success)
                         {
                             var imported = await form.Completion.WaitAsync(TimeSpan.FromSeconds(20));
-                            if (imported.Accounts.Count != 2 || !hiddenDuringNavigation) throw new Exception("Interactive import failed to finish privately.");
-                            lines.Add("PASS: the real import window hides the response before navigation, imports EU/PTR and closes after cleanup.");
+                            if (imported.Accounts.Count != 2 || !hiddenDuringNavigation || overviewShown) throw new Exception("Interactive import failed to finish privately and by itself.");
+                            lines.Add("PASS: after signing in, the import starts by itself without showing the account page, keeps the response hidden, imports EU/PTR and closes after cleanup.");
                         }
                         else
                         {

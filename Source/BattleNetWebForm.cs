@@ -14,12 +14,13 @@ internal sealed class BattleNetWebForm : Form
     private readonly TaskCompletionSource<BattleNetAccountData.ImportResult> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private BattleNetAccountData.ImportResult? result;
     private Exception? failure;
-    private bool initialized, reading, expectingImport, closing, closeApproved, signedIn;
+    private bool initialized, reading, expectingImport, closing, closeApproved;
+    private int autoImports;
     private readonly System.Windows.Forms.Timer timeout = new() { Interval = 45000 };
     protected override bool ShowWithoutActivation => !interactive;
     internal bool ResponseViewVisible => browser.Visible;
     internal Task<BattleNetAccountData.ImportResult> Completion => completion.Task;
-    internal BattleNetWebForm(BattleNetConnection connection, bool interactive, string? testProfileDirectory = null, Action<CoreWebView2Environment, CoreWebView2>? testSetup = null)
+    internal BattleNetWebForm(BattleNetConnection connection, bool interactive, string? testProfileDirectory = null, Action<CoreWebView2Environment, CoreWebView2>? testSetup = null, string? testStartUrl = null)
     {
         this.interactive = interactive;
         Text = "Connect Battle.net — " + connection.Name; Size = new(950, 780); StartPosition = FormStartPosition.CenterParent;
@@ -27,26 +28,19 @@ internal sealed class BattleNetWebForm : Form
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
         root.RowStyles.Add(new(SizeType.Absolute, 64)); root.RowStyles.Add(new(SizeType.Percent, 100)); root.RowStyles.Add(new(SizeType.Absolute, 54)); Controls.Add(root);
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new(10) };
-        var signIn = new Button { Text = "Back to Blizzard sign-in", AutoSize = true, Height = 36, Enabled = false };
-        var import = new Button { Name = "ImportAccounts", Text = "Finish connection — import WoW accounts", AutoSize = true, Height = 36, Enabled = false }; actions.Controls.AddRange(new Control[] { signIn, import });
+        var signIn = new Button { Text = "Back to Blizzard sign-in", AutoSize = true, Height = 36, Enabled = false }; actions.Controls.Add(signIn);
         var host = new Panel { Dock = DockStyle.Fill }; host.Controls.Add(browser); host.Controls.Add(notice);
         root.Controls.Add(actions, 0, 0); root.Controls.Add(host, 0, 1); root.Controls.Add(status, 0, 2);
-        status.Text = "Sign in on Blizzard's website. When you're signed in, choose Finish connection above.";
+        const string SignInHint = "Sign in on Blizzard's website. Your WoW accounts are imported as soon as you're signed in.";
+        status.Text = SignInHint;
         void HideResponse(string message) { browser.Visible = false; notice.Text = message; notice.Visible = true; notice.BringToFront(); }
-        // Signed in: Blizzard's account page is not needed, so it is replaced by what to do next, and only now can the import start.
-        void ShowSignedIn()
-        {
-            HideResponse("✓  You're signed in to Battle.net.\n\nChoose \u201cFinish connection — import WoW accounts\u201d above to bring in your WoW accounts.");
-            status.Text = "Signed in. Choose Finish connection above.";
-        }
         void BeginImport()
         {
             if (!initialized || reading || closing) return;
             expectingImport = true; HideResponse("Importing your WoW account names and regions…");
             status.Text = "Reading licenses. The raw account response is hidden."; timeout.Start(); browser.CoreWebView2.Navigate(AccountsUrl);
         }
-        signIn.Click += (_, _) => { if (initialized && !reading && !closing) { expectingImport = false; signedIn = false; import.Enabled = false; timeout.Stop(); HideResponse("Opening Blizzard sign-in…"); browser.CoreWebView2.Navigate(SignInUrl); } };
-        import.Click += (_, _) => BeginImport();
+        signIn.Click += (_, _) => { if (initialized && !reading && !closing) { expectingImport = false; autoImports = 0; timeout.Stop(); HideResponse("Opening Blizzard sign-in…"); browser.CoreWebView2.Navigate(SignInUrl); } };
         timeout.Tick += (_, _) => Fail("The account request timed out. Return to Blizzard sign-in and try again.");
         Shown += async (_, _) =>
         {
@@ -66,6 +60,8 @@ internal sealed class BattleNetWebForm : Form
                     if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri) || uri.Scheme != "https") { e.Cancel = true; return; }
                     // Hide before any API document can paint, including redirects and manual retries.
                     if (uri.AbsolutePath.StartsWith("/api/", StringComparison.OrdinalIgnoreCase)) HideResponse("Reading WoW licenses…");
+                    // Blizzard's account page after sign-in is never shown; the import starts from it instead.
+                    else if (interactive && IsSignedInPage(e.Uri)) HideResponse("✓  You're signed in to Battle.net.\n\nImporting your WoW accounts…");
                     else status.Text = "Blizzard connection · " + uri.Host;
                 };
                 core.NewWindowRequested += (_, e) => { e.Handled = true; if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri) && uri.Scheme == "https") core.Navigate(uri.AbsoluteUri); };
@@ -78,15 +74,19 @@ internal sealed class BattleNetWebForm : Form
                         if (Uri.TryCreate(core.Source, UriKind.Absolute, out var current) && !current.AbsolutePath.StartsWith("/api/", StringComparison.OrdinalIgnoreCase))
                         {
                             if (expectingImport) { expectingImport = false; timeout.Stop(); }
-                            signedIn = IsSignedInPage(core.Source); import.Enabled = signedIn;
-                            if (signedIn) ShowSignedIn();
-                            else { notice.Visible = false; browser.Visible = true; browser.BringToFront(); status.Text = "Sign in on Blizzard's website. When you're signed in, choose Finish connection above."; }
+                            // Signed in: the connection finishes by itself. Twice at most, in case Blizzard keeps sending us back here.
+                            if (IsSignedInPage(core.Source))
+                            {
+                                if (autoImports++ < 2) BeginImport();
+                                else Fail("Blizzard kept returning to its account page instead of the account list. Try again later.");
+                            }
+                            else { notice.Visible = false; browser.Visible = true; browser.BringToFront(); status.Text = SignInHint; }
                         }
                         return;
                     }
                     HideResponse("Importing WoW licenses…");
                     if (!e.IsSuccess || e.HttpStatusCode != 200) { Fail("Blizzard did not return an account list. Return to sign-in, or retry later if its service is unavailable."); return; }
-                    reading = true; import.Enabled = signIn.Enabled = false;
+                    reading = true; signIn.Enabled = false;
                     try
                     {
                         // The browser projects only these five license fields. Subscription/payment/address
@@ -96,12 +96,12 @@ internal sealed class BattleNetWebForm : Form
                         result = BattleNetAccountData.ParseDetailed(projected); timeout.Stop(); Close();
                     }
                     catch (Exception ex) { Fail(ex is InvalidOperationException ? ex.Message : "The account list could not be read. Return to sign-in and try again."); }
-                    finally { reading = false; if (!IsDisposed && !closing) { signIn.Enabled = true; import.Enabled = signedIn; } }
+                    finally { reading = false; if (!IsDisposed && !closing) signIn.Enabled = true; }
                 };
                 // Removes cached API pages left by older releases without reading them or clearing sign-in cookies.
                 await ClearCachedPages(core);
-                if (IsDisposed || closing) return; initialized = true; signIn.Enabled = true; // Finish connection waits until you're signed in
-                if (interactive) core.Navigate(SignInUrl); else BeginImport();
+                if (IsDisposed || closing) return; initialized = true; signIn.Enabled = true; // the import starts by itself once you're signed in
+                if (interactive) core.Navigate(testStartUrl ?? SignInUrl); else BeginImport();
             }
             catch (WebView2RuntimeNotFoundException) { Fail("Microsoft Edge WebView2 Runtime is required. Install it, then reconnect."); }
             catch (Exception) { Fail("The connection browser could not start or clear its old cache. Close other connection windows and try again."); }
@@ -109,7 +109,7 @@ internal sealed class BattleNetWebForm : Form
         FormClosing += async (_, e) =>
         {
             if (closeApproved || browser.CoreWebView2 is null) return;
-            e.Cancel = true; if (closing) return; closing = true; timeout.Stop(); import.Enabled = signIn.Enabled = false;
+            e.Cancel = true; if (closing) return; closing = true; timeout.Stop(); signIn.Enabled = false;
             HideResponse("Clearing cached account pages…");
             try { await ClearCachedPages(browser.CoreWebView2); }
             catch { failure = new InvalidOperationException("The connection closed, but its browser cache cleanup failed. Reopen Sign in / import to retry cleanup."); result = null; }
@@ -122,7 +122,7 @@ internal sealed class BattleNetWebForm : Form
             else if (result is not null) completion.TrySetResult(result);
             else completion.TrySetCanceled();
         };
-        AppTheme.Apply(this); AppTheme.Primary(import);
+        AppTheme.Apply(this);
     }
     internal const string LicenseProjectionScript = """
         (() => {
