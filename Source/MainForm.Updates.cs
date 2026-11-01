@@ -21,9 +21,10 @@ public sealed partial class MainForm
         try
         {
             var manager = new UpdateManager(UpdateSource(repository));
-            if (!manager.IsInstalled || manager.IsPortable)
+            // Installed and portable copies both update themselves; only a bare build folder cannot.
+            if (!manager.IsInstalled)
             {
-                if (userAsked) ThemedMessageBox.Show(this, $"HoverDeck {version}\n\nThis copy wasn't installed with the HoverDeck installer, so it can't update itself. Download the latest installer from:\n{repository}/releases", "Check for updates");
+                if (userAsked) ThemedMessageBox.Show(this, $"HoverDeck {version}\n\nThis copy wasn't installed with the HoverDeck installer or unpacked from the portable ZIP, so it can't update itself. Download the latest version from:\n{repository}/releases", "Check for updates");
                 return;
             }
             var update = await manager.CheckForUpdatesAsync();

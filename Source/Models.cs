@@ -55,16 +55,32 @@ public sealed record GameWindow(nint Handle, int ProcessId, long Started, string
 }
 public static class Storage
 {
-    // Installed copies keep settings in the user profile because each update replaces the
-    // app folder. The portable ZIP keeps Data beside HoverDeck.exe, as it always has.
-    public static readonly string DirectoryPath = InstalledBySetup ? System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HoverDeck", "Data") : System.IO.Path.Combine(AppContext.BaseDirectory, "Data");
-    public static bool InstalledBySetup
+    public static readonly string DirectoryPath = DataDirectory();
+    // Every update replaces the app's "current" folder, so settings live outside it: installed copies in
+    // the user profile, the portable ZIP in its own folder beside HoverDeck.exe. A build that is neither
+    // (run straight from its output folder) keeps Data beside its executable.
+    private static string DataDirectory()
     {
-        get
+        string beside = System.IO.Path.Combine(AppContext.BaseDirectory, "Data");
+        try
         {
-            try { var locator = Velopack.Locators.VelopackLocator.CreateDefaultForPlatform(null!, null!); return locator.CurrentlyInstalledVersion is not null && !locator.IsPortable; }
-            catch { return false; }
+            var locator = Velopack.Locators.VelopackLocator.CreateDefaultForPlatform(null!, null!);
+            if (locator.CurrentlyInstalledVersion is null || locator.RootAppDir is not { Length: > 0 } root) return beside;
+            if (!locator.IsPortable) return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HoverDeck", "Data");
+            string portable = System.IO.Path.Combine(root, "Data");
+            // Portable versions before 1.7.9 kept Data inside "current"; carry it over once.
+            if (!Directory.Exists(portable) && Directory.Exists(beside))
+            {
+                Directory.CreateDirectory(portable);
+                foreach (var file in Directory.EnumerateFiles(beside, "*", SearchOption.AllDirectories))
+                {
+                    string target = System.IO.Path.Combine(portable, System.IO.Path.GetRelativePath(beside, file));
+                    Directory.CreateDirectory(System.IO.Path.GetDirectoryName(target)!); File.Copy(file, target);
+                }
+            }
+            return portable;
         }
+        catch { return beside; }
     }
     public static readonly string SettingsPath = System.IO.Path.Combine(DirectoryPath, "settings.json");
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNameCaseInsensitive = true };

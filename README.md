@@ -32,7 +32,7 @@ If you run more than one WoW client at a time (multiboxing, or just keeping an a
 - **Close or restart all clients** from the arrow on *Start clients*.
 - **Arrange your Windows displays** (monitor positions and primary display) from inside HoverDeck, with a 20-second "keep or revert" safety net.
 - **Minimize your way.** Minimize to the notification area (default) or to the taskbar like any other window.
-- **Automatic updates.** The installed version checks for new releases and asks before updating.
+- **Automatic updates.** HoverDeck checks for new releases when it starts and asks before updating, whether you installed it or use the portable ZIP.
 
 HoverDeck only places windows, manages focus and starts clients. It does not broadcast keystrokes to multiple clients or automate gameplay. It is a fan-made tool, not affiliated with or endorsed by Blizzard Entertainment. Make sure your use follows the rules of the game or server you play on.
 
@@ -43,7 +43,7 @@ HoverDeck only places windows, manages focus and starts clients. It does not bro
 
 It installs for your Windows account only (no administrator rights needed), adds desktop and Start menu shortcuts, and installs the .NET 8 Desktop Runtime and Microsoft WebView2 if they're missing. Uninstall it from **Settings → Apps → Installed apps** or **Programs and Features**. Your layouts and settings are kept in `%LOCALAPPDATA%\HoverDeck\Data`.
 
-Prefer not to install? **HoverDeck-Portable.zip** on the same page runs from any writable folder, but doesn't update itself.
+Prefer not to install? **HoverDeck-Portable.zip** on the same page runs from any writable folder. Unzip it and open **HoverDeck.exe**; it updates itself the same way and keeps your settings in a `Data` folder next to it. The `Update.exe` and `current` folder beside it belong to the updater, so keep the folder together and don't run `Update.exe` yourself.
 
 **Requirements:** Windows 10 or 11 (64-bit). For Battle.net clients, keep the desktop Battle.net launcher open, signed in and in English.
 
