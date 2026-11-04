@@ -168,8 +168,8 @@ internal sealed class LibraryUiTests : Form
                     if (idle.Controls.Find("ApplyPositions", true).Single().Visible) throw new Exception("Apply positions is shown although no open client differs from the map.");
                     lines.Add("PASS: Apply positions stays hidden while no open window differs from the map");
                     var actions = (ContextMenuStrip)typeof(MainForm).GetField("clientMenu", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(idle)!;
-                    if (!actions.Items.Cast<ToolStripItem>().Select(i => i.Text).SequenceEqual(new[] { "Close clients", "Restart clients" })) throw new Exception("The Start clients arrow menu does not offer Close clients and Restart clients.");
-                    lines.Add("PASS: the Start clients arrow menu offers Close clients and Restart clients");
+                    if (!actions.Items.Cast<ToolStripItem>().Select(i => i.Text).SequenceEqual(new[] { "Close clients", "Restart clients", "Connect open clients…" })) throw new Exception("The Start clients arrow menu does not offer Close clients, Restart clients and Connect open clients.");
+                    lines.Add("PASS: the Start clients arrow menu offers Close clients, Restart clients and Connect open clients");
                     var startButton = Descendants(idle).OfType<BlueButton>().First(); idle.TopMost = true; idle.Activate();
                     actions.Show(startButton, new Point(0, -4), ToolStripDropDownDirection.AboveRight); Application.DoEvents(); Thread.Sleep(300); Application.DoEvents();
                     var menuArea = Rectangle.Union(startButton.RectangleToScreen(startButton.ClientRectangle), actions.Bounds); menuArea.Inflate(16, 16);

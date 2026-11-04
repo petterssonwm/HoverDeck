@@ -208,7 +208,7 @@ public sealed partial class MainForm : Form
             var signature = new HashCode();
             foreach (var s in layout.Slots) if (canvas.Assigned.TryGetValue(s.Id, out var w)) { signature.Add(s.Id); signature.Add(w.Handle); signature.Add(w.Bounds); signature.Add(w.Minimized); }
             if (signature.ToHashCode() is var current && current != openSignature) { openSignature = current; slots.Invalidate(); canvas.Invalidate(); }
-            UpdateApplyButton();
+            UpdateApplyButton(); UpdateConnectBar(windows);
             if (hover?.Error is { } err && lastHoverError != err) { lastHoverError = err; Log("Hover focus error: " + err); toggle.Checked = false; }
             string coverageStatus = "";
             if (hover?.CoverageError is { } coverageError)
@@ -223,6 +223,13 @@ public sealed partial class MainForm : Form
     private async Task RunLayout(bool launchMissing)
     {
         if (busy || displayApplying || arrangeDisplays.Checked) return;
+        // WoW windows opened outside HoverDeck: say which client each one is before anything is launched.
+        if (launchMissing)
+        {
+            var open = launcher.Scan(layout); var known = launcher.Assign(layout, open);
+            if (UnconnectedWindows(open, known).Count > 0 && layout.Slots.Any(s => !known.ContainsKey(s.Id))
+                && !ConnectOpenClients("These WoW clients are already open. Choose which client each one is; Start clients then puts them in place and opens the rest.")) return;
+        }
         SaveNow(); busy = true; launchCancellation = new(); hover?.Suspend(true); SetWorkspaceEnabled(false); start.Visible = apply.Visible = false; cancel.Visible = cancel.Enabled = true; mainMenu.Enabled = false; SetStatus("Preparing clients…");
         try
         {

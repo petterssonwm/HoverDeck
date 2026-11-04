@@ -146,6 +146,6 @@ public static class Matching
             { result[edge.slot.Id] = edge.window; available.Remove(edge.window); }
         return result;
     }
-    private static double Distance(Rectangle a, Rectangle b) => Math.Pow(a.X - (double)b.X, 2) + Math.Pow(a.Y - (double)b.Y, 2) + .25 * (Math.Pow(a.Width - (double)b.Width, 2) + Math.Pow(a.Height - (double)b.Height, 2));
+    internal static double Distance(Rectangle a, Rectangle b) => Math.Pow(a.X - (double)b.X, 2) + Math.Pow(a.Y - (double)b.Y, 2) + .25 * (Math.Pow(a.Width - (double)b.Width, 2) + Math.Pow(a.Height - (double)b.Height, 2));
     public static bool OnScreen(Rectangle r, IReadOnlyList<MonitorInfo> monitors) => monitors.Any(m => { var hit = Rectangle.Intersect(m.Bounds, r); return hit.Width >= 80 && hit.Height >= 40; });
 }

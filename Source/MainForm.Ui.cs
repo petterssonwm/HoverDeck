@@ -62,6 +62,12 @@ public sealed partial class MainForm
 
         var editor = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, Margin = Padding.Empty, BackColor = Background };
         canvas.Monitors = monitors; canvas.Layout = layout;
+        // Shown on the map while WoW windows are open that no client here is connected to.
+        connectBar.Controls.Add(connectText); connectBar.Controls.Add(connectButton); AppTheme.Primary(connectButton);
+        connectBar.Paint += (_, e) => { using var edge = new Pen(AppTheme.Blue); e.Graphics.DrawRectangle(edge, 0, 0, connectBar.Width - 1, connectBar.Height - 1); };
+        canvas.Controls.Add(connectBar);
+        canvas.Resize += (_, _) => connectBar.Bounds = new(Math.Max(12, (canvas.Width - 600) / 2), 12, Math.Min(600, canvas.Width - 24), 42);
+        connectButton.Click += (_, _) => ConnectOpenClients();
         var details = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Surface, Padding = new(16, 12, 16, 10), ColumnCount = 1, RowCount = 2, Margin = Padding.Empty };
         details.RowStyles.Add(new(SizeType.Absolute, 40)); details.RowStyles.Add(new(SizeType.Percent, 100));
         details.Paint += (_, e) => { using var edge = new Pen(AppTheme.Line); e.Graphics.DrawRectangle(edge, 0, 0, details.Width - 1, details.Height - 1); };
@@ -144,7 +150,9 @@ public sealed partial class MainForm
         start.ShowArrow = true; start.ArrowClick += () => { start.Focus(); clientMenu.Show(start, new Point(0, -4), ToolStripDropDownDirection.AboveRight); };
         clientMenu.MinimumSize = new(start.Width, 0); start.Resize += (_, _) => clientMenu.MinimumSize = new(start.Width, 0);
         closeClients.Click += async (_, _) => await CloseClients(false); restartClients.Click += async (_, _) => await CloseClients(true);
-        clientMenu.Items.AddRange(new ToolStripItem[] { closeClients, restartClients });
+        var connectClients = new ToolStripMenuItem("Connect open clients…") { Name = "ConnectClients", Padding = new(8, 6, 8, 6), ToolTipText = "Choose which client each WoW window you opened yourself belongs to." };
+        connectClients.Click += (_, _) => ConnectOpenClients();
+        clientMenu.Items.AddRange(new ToolStripItem[] { closeClients, restartClients, connectClients });
         clientMenu.Opening += (_, _) => { bool any = canvas.Assigned.Count > 0; closeClients.Enabled = restartClients.Enabled = any && !busy; };
         start.Click += async (_, _) => await RunLayout(true); apply.Click += async (_, _) => await RunLayout(false); cancel.Click += (_, _) => launchCancellation?.Cancel();
         saveTimer.Tick += (_, _) => { saveTimer.Stop(); SaveNow(); }; refresh.Tick += (_, _) => { RefreshDisplayGeometry(); RefreshClients(); };
@@ -158,6 +166,7 @@ public sealed partial class MainForm
         layoutMenu.DropDownItems.Add("Save a copy…", null, (_, _) => SaveAs(false));
         layoutMenu.DropDownItems.Add(new ToolStripSeparator());
         layoutMenu.DropDownItems.Add("Capture open clients", null, (_, _) => CaptureWindows());
+        layoutMenu.DropDownItems.Add(new ToolStripMenuItem("Connect open clients…", null, (_, _) => ConnectOpenClients()) { Name = "ConnectOpenClients" });
         layoutMenu.DropDownItems.Add("Direct-launch defaults…", null, (_, _) => EditDirectDefaults());
         layoutMenu.DropDownItems.Add(new ToolStripSeparator()); layoutMenu.DropDownItems.Add("Exit", null, (_, _) => Close());
         sharedSettingsMenu.DropDownItems.Add(new ToolStripMenuItem("Setup guide…", null, async (_, _) => await ShowSetupGuide()) { Name = "SetupGuide" });
@@ -307,6 +316,38 @@ public sealed partial class MainForm
         try { await action(); }
         catch (Exception ex) { ThemedMessageBox.Show(this, ex.Message, "Settings"); }
         finally { busy = false; mainMenu.Enabled = mainArea.Enabled = start.Enabled = true; hover?.Suspend(false); UpdateSlotDetails(); RefreshClients(); }
+    }
+    private readonly Panel connectBar = new() { Name = "ConnectBar", Visible = false, BackColor = Color.FromArgb(14, 39, 66), Padding = new(0, 6, 7, 6) };
+    private readonly Label connectText = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = AppTheme.Ink, BackColor = Color.Transparent, Padding = new(12, 0, 0, 0) };
+    private readonly Button connectButton = new() { Text = "Connect…", Dock = DockStyle.Right, Width = 110, Name = "ConnectBarButton" };
+    // Open WoW windows of this layout's game versions that no client here is connected to.
+    private List<GameWindow> UnconnectedWindows(IEnumerable<GameWindow> windows, IReadOnlyDictionary<string, GameWindow> assigned)
+    {
+        var paths = layout.Slots.Select(s => s.PathFor(layout)).ToList(); var used = assigned.Values.Select(w => w.Identity).ToHashSet();
+        return windows.Where(w => !used.Contains(w.Identity) && paths.Any(p => Matching.SamePath(p, w.Executable))).ToList();
+    }
+    private void UpdateConnectBar(IEnumerable<GameWindow> windows)
+    {
+        int open = UnconnectedWindows(windows, canvas.Assigned).Count;
+        bool show = open > 0 && layout.Slots.Any(s => !canvas.Assigned.ContainsKey(s.Id)) && !busy && !arrangeDisplays.Checked;
+        string text = $"{open} WoW client{(open == 1 ? " is" : "s are")} open but not connected to a client here.";
+        if (connectText.Text != text) connectText.Text = text;
+        if (connectBar.Visible != show) connectBar.Visible = show;
+    }
+    // Lets the player say which client each open WoW window is. True when something was connected.
+    private bool ConnectOpenClients(string? intro = null)
+    {
+        if (busy || displayApplying || arrangeDisplays.Checked) return false;
+        var windows = launcher.Scan(layout); var assigned = launcher.Assign(layout, windows);
+        if (windows.Count == 0) { ThemedMessageBox.Show(this, "No open WoW clients were found for the game versions in this layout.", "Connect open clients"); return false; }
+        using var dialog = new ConnectClientsForm(layout, windows, assigned, monitors, intro
+            ?? "Each card shows a live picture of an open WoW window. Choose which client it is. HoverDeck can't see which account is logged in to a running game, so match them by what you see.");
+        if (dialog.ShowDialog(this) != DialogResult.OK) return false;
+        ConnectClientsForm.Apply(layout, launcher.Bindings, dialog.Choices);
+        int connected = dialog.Choices.Count(c => c.Slot is not null);
+        SaveNow(); RefreshClients(); UpdateApplyButton();
+        Log($"Connected {connected} open WoW window{(connected == 1 ? "" : "s")} to clients in {layout.Name}.");
+        return true;
     }
     // The click-through guide: opens by itself on a PC without settings, and from Settings → Setup guide.
     private async Task ShowSetupGuide()
