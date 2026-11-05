@@ -1,4 +1,4 @@
-HOVERDECK 1.8.0 — WoW workspace
+HOVERDECK 1.8.1 — WoW workspace
 
 Open HoverDeck.exe. Requires Windows x64, .NET 8 Windows Desktop Runtime and Microsoft Edge WebView2 Runtime.
 Downloads: https://dotnet.microsoft.com/download/dotnet/8.0 and https://developer.microsoft.com/microsoft-edge/webview2/ (Evergreen Runtime).
@@ -56,7 +56,7 @@ The installed-version dropdown resolves executable paths automatically. If there
 
 Battle.net works in the background. Start clients opens the desktop Battle.net launcher if it is closed or in the notification area, waits until it shows your games, then minimizes it and selects the version, account and Play without taking focus, so you can keep using other windows. A launcher that is already open is minimized first. If Battle.net is not signed in, HoverDeck shows it and asks you to sign in; press Start clients again afterwards. Battle.net logs a starting game in with the account selected at that moment, so each client's account is selected only after the previous client's window has opened. The launcher must be in English. Its version/account availability is checked before Play. Cancel stops further launcher input. Complete authentication, updates, game prompts, two-factor checks and character selection yourself.
 
-After a launch, HoverDeck saves the process identity and places the new window. Start clients reuses the tracked processes across restarts. It does not inspect the account inside an already-running game. If a client was opened outside HoverDeck and is not tracked, close it and use Start clients to launch the selected account. Manual window assignment is not supported.
+After a launch, HoverDeck saves the process identity and places the new window. Start clients reuses the tracked processes across restarts. It does not inspect the account inside an already-running game. WoW clients you opened yourself can be connected: Connect open clients (a bar on the map, the Start clients arrow menu or the Layout menu) shows a live picture of every open WoW window and lets you choose which client each one is. HoverDeck cannot see which account is logged in to a running game, so you match them. Start clients opens the same window when such clients are running. Connected windows are placed and handled like clients HoverDeck started.
 
 An attempt is saved before Play. Cancel or a restart will not press Play twice: retry waits for the pending window. Complete any launcher prompts, then use Start clients to resume waiting. Normal Battle.net/WoW authentication and concurrent-session limits still apply.
 
