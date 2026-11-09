@@ -49,6 +49,22 @@ internal sealed class IntegrationTests : Form
             await launcher.Run(layout, monitors, true, lines.Add, CancellationToken.None);
             windows = Native.Windows(new[] { executable });
             Check("Restart opens fresh clients in every slot at the requested rectangles", windows.Count == 2 && !windows.Any(w => beforeClose.Contains(w.Identity)) && windows.Select(w => w.Bounds).ToHashSet().SetEquals(layout.Slots.Select(s => s.Bounds)));
+            // The tick box beside each client: unticked clients are left closed, but one that is open is still placed.
+            await launcher.Close(layout, lines.Add, CancellationToken.None, TimeSpan.FromSeconds(15));
+            foreach (var s in layout.Slots) s.StartWithLayout = false;
+            bool refused = false;
+            try { await launcher.Run(layout, monitors, true, lines.Add, CancellationToken.None); } catch (InvalidOperationException) { refused = true; }
+            Check("Start clients with no client ticked opens nothing and says so", refused && Native.Windows(new[] { executable }).Count == 0);
+            layout.Slots[0].StartWithLayout = true;
+            newlyOpened = await launcher.Run(layout, monitors, true, lines.Add, CancellationToken.None);
+            windows = Native.Windows(new[] { executable });
+            Check("Start clients opens only the ticked clients", windows.Count == 1 && newlyOpened.Count == 1 && windows[0].Bounds == layout.Slots[0].Bounds);
+            Native.Place(windows[0], new(area.X + 300, area.Y + 200, 500, 320)); await Task.Delay(300);
+            layout.Slots[0].StartWithLayout = false; layout.Slots[1].StartWithLayout = true;
+            newlyOpened = await launcher.Run(layout, monitors, true, lines.Add, CancellationToken.None);
+            windows = Native.Windows(new[] { executable });
+            Check("An unticked client that is already open is still put in place", windows.Count == 2 && newlyOpened.Count == 1 && windows.Select(w => w.Bounds).ToHashSet().SetEquals(layout.Slots.Select(s => s.Bounds)));
+            foreach (var s in layout.Slots) s.StartWithLayout = true;
             // Clients opened outside HoverDeck: the player connects each window to a Battle.net client, which
             // HoverDeck cannot work out itself. Connected windows are then placed like HoverDeck's own.
             {

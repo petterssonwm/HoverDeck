@@ -16,6 +16,8 @@ public sealed class Slot
     public ClientWindowMode WindowMode { get; set; }
     // Where clients overlap, a higher layer stays in front. 1 is the back.
     public int Layer { get; set; } = 1;
+    // Unticked clients are left closed by Start clients; one that is already open is still put in place.
+    public bool StartWithLayout { get; set; } = true;
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public BattleNetLaunch? BattleNet { get; set; }
     public int X { get; set; }

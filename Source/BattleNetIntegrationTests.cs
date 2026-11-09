@@ -117,6 +117,19 @@ internal sealed class BattleNetIntegrationTests : Form
             bool blocked = false;
             try { await settling.Run(pair, monitors, true, lines.Add, CancellationToken.None); } catch (InvalidOperationException ex) { blocked = ex.Message.Contains("not tracked"); }
             Check("A pending launch is settled before other clients and does not block them", !blocked && pendingGateway.Plays == 3 && settling.Assign(pair, settling.Scan(pair)).Count == 2);
+            await CloseAll();
+            // A launch left pending long ago whose game never opened is given up, and Play is pressed again
+            // instead of waiting for it at every Start.
+            var stale = new Layout { Slots = new() { NewSlot(1) } }; var staleProfile = stale.Slots[0].BattleNet!; var restarting = new Launcher(pendingGateway); int playsBefore = pendingGateway.Plays;
+            staleProfile.ResolvedAccount = "WoW1 (EU)"; staleProfile.PendingSinceUtc = DateTimeOffset.UtcNow.AddMinutes(-20).ToString("O");
+            await restarting.Run(stale, monitors, true, lines.Add, CancellationToken.None);
+            Check("A launch pending for 20 minutes with no game window presses Play again", pendingGateway.Plays == playsBefore + 1 && staleProfile.PendingSinceUtc.Length == 0 && staleProfile.BoundIdentity.Length > 0);
+            await CloseAll();
+            var recent = new Layout { Slots = new() { NewSlot(1) } }; var recentProfile = recent.Slots[0].BattleNet!; playsBefore = pendingGateway.Plays;
+            recentProfile.ResolvedAccount = "WoW1 (EU)"; recentProfile.PendingSinceUtc = DateTimeOffset.UtcNow.AddSeconds(-5).ToString("O");
+            using (var shortWait = new CancellationTokenSource(TimeSpan.FromSeconds(3)))
+                try { await new Launcher(pendingGateway).Run(recent, monitors, true, lines.Add, shortWait.Token); } catch (OperationCanceledException) { }
+            Check("A recent pending launch is still waited for without pressing Play again", pendingGateway.Plays == playsBefore && recentProfile.PendingSinceUtc.Length > 0);
             lines.Add("Battle.net launch coordination checks passed using local fixtures only.");
         }
         catch (Exception ex) { lines.Add(ex.ToString()); Environment.ExitCode = 1; }

@@ -227,14 +227,14 @@ public sealed partial class MainForm : Form
         if (launchMissing)
         {
             var open = launcher.Scan(layout); var known = launcher.Assign(layout, open);
-            if (UnconnectedWindows(open, known).Count > 0 && layout.Slots.Any(s => !known.ContainsKey(s.Id))
+            if (UnconnectedWindows(open, known).Count > 0 && layout.Slots.Any(s => s.StartWithLayout && !known.ContainsKey(s.Id))
                 && !ConnectOpenClients("These WoW clients are already open. Choose which client each one is; Start clients then puts them in place and opens the rest.")) return;
         }
         SaveNow(); busy = true; launchCancellation = new(); hover?.Suspend(true); SetWorkspaceEnabled(false); start.Visible = apply.Visible = false; cancel.Visible = cancel.Enabled = true; mainMenu.Enabled = false; SetStatus("Preparing clients…");
         try
         {
             if (launchMissing)
-                foreach (var slot in layout.Slots.Where(s => s.LaunchMethod == ClientLaunchMethod.BattleNet && s.BattleNet is not null))
+                foreach (var slot in layout.Slots.Where(s => s.StartWithLayout && s.LaunchMethod == ClientLaunchMethod.BattleNet && s.BattleNet is not null))
                     BattleNetConnectionSettings.ValidateSelection(settings, slot.BattleNet!);
             var opened = await launcher.Run(layout, monitors, launchMissing, Log, launchCancellation.Token, SaveNow);
             if (launchMissing)

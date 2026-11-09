@@ -49,6 +49,7 @@ public sealed class LayoutCanvas : Control
     public void FitView() { displayViewBounds = null; Invalidate(); }
     private RectangleF Map(Rectangle r) => new((float)(offset.X + r.X * scale), (float)(offset.Y + r.Y * scale), (float)(r.Width * scale), (float)(r.Height * scale));
     internal RectangleF Project(Rectangle r) { Transform(); return Map(r); }
+    private bool Skipped(int i) => Layout is not null && !Layout.Slots[i].StartWithLayout && !Assigned.ContainsKey(Layout.Slots[i].Id);
     // The map repaints on every mouse move while dragging, so its fixed fonts, brushes and pens are made once.
     private static readonly Font small = new("Segoe UI", 9), regular = new("Segoe UI", 10, FontStyle.Bold), numberFont = new("Segoe UI", 21, FontStyle.Bold);
     private static readonly Pen gridPen = new(Color.FromArgb(20, 24, 33)), taskbarPen = new(TaskbarColor, 1), framePen = new(AppTheme.Line), liveEdge = new(Color.FromArgb(235, 241, 250), 1) { DashStyle = DashStyle.Dash };
@@ -92,14 +93,15 @@ public sealed class LayoutCanvas : Control
         foreach (var i in indices)
         {
             if (Layout is null || i < 0 || i >= Layout.Slots.Count) continue;
-            using var fill = new SolidBrush(Color.FromArgb(i == Selected ? 65 : 40, SlotColors[i % SlotColors.Length]));
+            using var fill = new SolidBrush(Color.FromArgb((i == Selected ? 65 : 40) / (Skipped(i) ? 3 : 1), SlotColors[i % SlotColors.Length]));
             g.FillRectangle(fill, Map(Layout.Slots[i].Bounds));
         }
         foreach (var i in indices)
         {
             if (Layout is null || i < 0 || i >= Layout.Slots.Count) continue;
             var r = Map(Layout.Slots[i].Bounds); var color = SlotColors[i % SlotColors.Length];
-            using var edge = new Pen(color, i == Selected ? 2.5f : 1.2f);
+            // A client that Start clients leaves closed is drawn faded.
+            using var edge = new Pen(Skipped(i) ? Color.FromArgb(110, color) : color, i == Selected ? 2.5f : 1.2f);
             g.DrawRectangle(edge, r.X, r.Y, r.Width, r.Height);
             if (i == Selected) { using var handle = new SolidBrush(color); g.FillRectangle(handle, r.Right - 9, r.Bottom - 9, 9, 9); }
         }

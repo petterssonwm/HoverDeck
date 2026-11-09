@@ -25,7 +25,13 @@ public sealed class Launcher
     {
         var newClients = new List<LaunchedClient>();
         if (layout.Slots.Count == 0) throw new InvalidOperationException("Add at least one client slot.");
-        foreach (var slot in layout.Slots)
+        var assigned = Assign(layout, Scan(layout));
+        // Unticked clients are not opened; one that is already open is still put in place.
+        var active = layout.Slots.Where(s => s.StartWithLayout || assigned.ContainsKey(s.Id)).ToList();
+        if (active.Count == 0) throw new InvalidOperationException("No client is ticked to start. Tick the box beside each client you want Start clients to open.");
+        int skipped = layout.Slots.Count - active.Count;
+        if (skipped > 0 && launchMissing) log($"Leaving {skipped} unticked client{(skipped == 1 ? "" : "s")} closed: {string.Join(", ", layout.Slots.Except(active).Select(s => s.Name))}.");
+        foreach (var slot in active)
         {
             var path = slot.PathFor(layout);
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path) || !Path.GetExtension(path).Equals(".exe", StringComparison.OrdinalIgnoreCase))
@@ -33,19 +39,19 @@ public sealed class Launcher
             if (!Matching.OnScreen(slot.Bounds, monitors)) throw new InvalidOperationException($"{slot.Name} is outside the connected displays. Move it onto a display before starting.");
             if (slot.LaunchMethod == ClientLaunchMethod.BattleNet && slot.BattleNet is not { IsConfigured: true }) throw new InvalidOperationException($"Configure Battle.net in Edit client for {slot.Name}.");
         }
-        var bnetSlots = layout.Slots.Where(s => s.LaunchMethod == ClientLaunchMethod.BattleNet).ToList();
+        var bnetSlots = active.Where(s => s.LaunchMethod == ClientLaunchMethod.BattleNet).ToList();
         if (bnetSlots.GroupBy(s => (s.BattleNet!.GameVersion, s.BattleNet.AccountKey)).Any(g => g.Count() > 1))
             throw new InvalidOperationException("Two slots request the same WoW account and game version. Choose a different WoW account for each client.");
+        // Checked against every client, ticked or not: window matching treats the whole layout alike.
         if (bnetSlots.Any(b => layout.Slots.Any(d => d.LaunchMethod == ClientLaunchMethod.Direct && Matching.SamePath(d.PathFor(layout), b.PathFor(layout)))))
             throw new InvalidOperationException("Slots using the same installed game must use the same launch method. Configure its accounts through Battle.net for each slot.");
-        var assigned = Assign(layout, Scan(layout));
         var initial = assigned.Count;
         int launched = 0;
         // Open clients are placed first, so a stuck launch cannot hold them up. A launch still pending from an
         // earlier attempt comes next, so its window, once open, is not mistaken for an untracked client by a
         // new launch. Otherwise the layout's order is kept.
         var open = assigned.Keys.ToHashSet();
-        foreach (var slot in layout.Slots.OrderBy(s => open.Contains(s.Id) ? 0 : s.BattleNet is { PendingSinceUtc.Length: > 0 } ? 1 : 2))
+        foreach (var slot in active.OrderBy(s => open.Contains(s.Id) ? 0 : s.BattleNet is { PendingSinceUtc.Length: > 0 } ? 1 : 2))
         {
             token.ThrowIfCancellationRequested();
             // Reconcile again so a client opened by the user during launch is reused.
@@ -53,11 +59,12 @@ public sealed class Launcher
             assigned = Assign(layout, windows);
             if (!assigned.TryGetValue(slot.Id, out var window))
             {
-                if (!launchMissing) { log($"{slot.Name}: no matching open client."); continue; }
+                if (!launchMissing || !slot.StartWithLayout) { log($"{slot.Name}: no matching open client."); continue; }
                 if (slot.LaunchMethod == ClientLaunchMethod.BattleNet)
                 {
                     // Battle.net logs a starting game in with the account selected at that moment, so the
                     // next client's account is chosen only after this window has opened and settled.
+                    ExpireStalePending(slot, layout, windows, log, saveBindings);
                     bool fresh = string.IsNullOrEmpty(slot.BattleNet!.PendingSinceUtc);
                     window = await OpenBattleNet(slot, layout, windows, log, token, saveBindings);
                     if (fresh) launched++;
@@ -123,7 +130,7 @@ public sealed class Launcher
         assigned = Assign(layout, Scan(layout));
         foreach (var slot in layout.Slots)
             if (assigned.TryGetValue(slot.Id, out var w) && w.Bounds != slot.Bounds) mismatched++;
-        log($"Ready · reused {initial}, opened {launched}, matched {assigned.Count}/{layout.Slots.Count}." + (mismatched > 0 ? $" {mismatched} client(s) did not accept the exact size; use windowed mode and Apply positions." : ""));
+        log($"Ready · reused {initial}, opened {launched}, matched {assigned.Count}/{layout.Slots.Count}" + (skipped > 0 ? $", {skipped} left closed." : ".") + (mismatched > 0 ? $" {mismatched} client(s) did not accept the exact size; use windowed mode and Apply positions." : ""));
         return newClients;
     }
     private async Task<GameWindow> OpenBattleNet(Slot slot, Layout layout, List<GameWindow> windows, Action<string> log, CancellationToken token, Action? saveBindings)
@@ -174,6 +181,21 @@ public sealed class Launcher
             await Task.Delay(250, token);
         }
         throw new TimeoutException($"{slot.Name}: Battle.net did not produce the configured game window. Complete any launcher prompts, then use Start clients to keep waiting for this launch.");
+    }
+    // A launch whose game never opened (Battle.net showed an error, or the game was closed while it was
+    // loading) would otherwise be waited for at every Start without pressing Play. Once it is older than
+    // this, with no new game window and no game still loading, it is given up and Play is pressed again.
+    internal static readonly TimeSpan PendingExpiry = TimeSpan.FromMinutes(5);
+    private void ExpireStalePending(Slot slot, Layout layout, List<GameWindow> windows, Action<string> log, Action? saveBindings)
+    {
+        var profile = slot.BattleNet!;
+        if (profile.PendingSinceUtc.Length == 0 || !DateTimeOffset.TryParse(profile.PendingSinceUtc, out var since) || DateTimeOffset.UtcNow - since < PendingExpiry) return;
+        string path = slot.PathFor(layout); var before = profile.BeforeLaunch.ToHashSet();
+        var known = layout.Slots.Where(s => s.Id != slot.Id).Select(s => s.BattleNet?.BoundIdentity ?? "").ToHashSet();
+        if (windows.Any(w => Matching.SamePath(w.Executable, path) && !before.Contains(w.Identity) && !known.Contains(w.Identity) && w.Started >= since.UtcDateTime.AddSeconds(-2).Ticks)) return;
+        using (var loading = FindLoadingProcess(path, windows.Select(w => w.Identity).ToHashSet())) if (loading is not null) return;
+        profile.ClearBinding(); saveBindings?.Invoke();
+        log($"{slot.Name}: the launch requested at {since.ToLocalTime():HH:mm} never opened a game window. Pressing Play again.");
     }
     private static bool HasExited(Process p) { try { return p.HasExited; } catch { return true; } }
     // Asks each open client of the layout to close, exactly like clicking its window's X,

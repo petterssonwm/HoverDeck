@@ -105,7 +105,7 @@ public sealed partial class MainForm
             using (var edge = new Pen(AppTheme.ButtonBorder)) e.Graphics.DrawRectangle(edge, 0, 0, e.Bounds.Width - 1, e.Bounds.Height - 1);
             TextRenderer.DrawText(e.Graphics, e.ToolTipText, e.Font, Rectangle.Inflate(e.Bounds, -4, -2), AppTheme.Ink, TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak);
         };
-        hints.SetToolTip(start, "Open missing clients and move every open client into place. Already assigned clients are reused.");
+        hints.SetToolTip(start, "Open the ticked clients that are missing and move every open client into place. Already assigned clients are reused; unticked clients are left closed.");
         hints.SetToolTip(apply, "Move the clients that are already open to their positions on the map. Nothing is launched or logged in.");
         Theme(this); slots.BackColor = AppTheme.Rail; logBox.BackColor = Surface; UpdateHotkeyLabel();
         var trayMenu = new ContextMenuStrip { Renderer = new WorkspaceMenuRenderer() }; trayMenu.Items.Add("Open HoverDeck", null, (_, _) => RestoreWindow()); trayMenu.Items.Add("Toggle WoW hover focus", null, (_, _) => { if (toggle.Enabled) toggle.Checked = !toggle.Checked; }); trayMenu.Items.Add(new ToolStripSeparator()); trayMenu.Items.Add("Exit and restore Windows settings", null, (_, _) => Close());
@@ -128,6 +128,17 @@ public sealed partial class MainForm
         deleteItem.Click += (_, _) => { if (CurrentSlot is { } s) DeleteClient(s); };
         clientContext.Items.AddRange(new ToolStripItem[] { editItem, new ToolStripSeparator(), deleteItem });
         clientContext.Opening += (_, e) => { e.Cancel = busy || CurrentSlot is null; deleteItem.Enabled = layout.Slots.Count > 1; };
+        // The tick box beside each client: click it, or press Space on the selected client.
+        slots.MouseDown += (_, e) => { if (e.Button == MouseButtons.Left && OverStartBox(e.Location, out int index)) ToggleStart(index); };
+        slots.KeyDown += (_, e) => { if (e.KeyCode == Keys.Space && slots.SelectedIndex >= 0) { ToggleStart(slots.SelectedIndex); e.Handled = e.SuppressKeyPress = true; } };
+        bool overBox = false;
+        slots.MouseMove += (_, e) =>
+        {
+            bool over = OverStartBox(e.Location, out int _); if (over == overBox) return; overBox = over;
+            slots.Cursor = over ? Cursors.Hand : Cursors.Default;
+            hints.SetToolTip(slots, over ? "Ticked clients open when you press Start clients. Unticked ones are left closed; if one is already open, it is still put in place." : null);
+        };
+        slots.MouseLeave += (_, _) => { if (overBox) { overBox = false; slots.Cursor = Cursors.Default; hints.SetToolTip(slots, null); } };
         slots.MouseDown += (_, e) =>
         {
             if (e.Button != MouseButtons.Right) return;
@@ -135,7 +146,8 @@ public sealed partial class MainForm
             slots.SelectedIndex = index; clientContext.Show(slots, e.Location);
         };
         canvas.ClientContextRequested += location => clientContext.Show(canvas, location);
-        slots.DoubleClick += async (_, _) => await ConfigureClientLogin(); edit.Click += async (_, _) => await ConfigureClientLogin();
+        // A quick second click on the tick box toggles it back instead of opening Edit client.
+        slots.DoubleClick += async (_, _) => { if (!OverStartBox(slots.PointToClient(Cursor.Position), out int _)) await ConfigureClientLogin(); }; edit.Click += async (_, _) => await ConfigureClientLogin();
         // Changing the list selection updates the details itself; only an unchanged selection needs it here.
         canvas.SelectionChanged += () => { if (slots.SelectedIndex != canvas.Selected) slots.SelectedIndex = canvas.Selected; else UpdateSlotDetails(); };
         canvas.LayoutEdited += () => { UpdateSlotDetails(); UpdateApplyButton(); SaveSoon(); };
@@ -250,13 +262,43 @@ public sealed partial class MainForm
         }
         var color = LayoutCanvas.SlotColors[e.Index % LayoutCanvas.SlotColors.Length];
         AppTheme.DrawTile(g, new Rectangle(r.X + 18, r.Y + 10, 42, 42), color, $"{e.Index + 1:00}", TileNumber);
-        bool open = canvas.Assigned.ContainsKey(slot.Id); string state = open ? "OPEN" : "PLANNED";
-        var stateSize = AppTheme.MeasureTracked(state, CardState, .8f);
-        AppTheme.DrawTracked(g, state, CardState, open ? AppTheme.Online : Color.FromArgb(92, 99, 112), new Rectangle(r.Right - 18 - stateSize.Width, r.Y, stateSize.Width + 2, r.Height), .8f);
-        int textWidth = r.Width - 72 - stateSize.Width - 30;
-        TextRenderer.DrawText(g, slot.Name, CardName, new Rectangle(r.X + 72, r.Y + 11, textWidth, 22), Ink, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+        bool open = canvas.Assigned.ContainsKey(slot.Id), skipped = !open && !slot.StartWithLayout; string state = open ? "OPEN" : skipped ? "SKIPPED" : "PLANNED";
+        DrawStartBox(g, StartBoxBounds(r), slot.StartWithLayout);
+        var stateSize = AppTheme.MeasureTracked(state, CardState, .8f); int stateRight = StartBoxBounds(r).X - 10;
+        AppTheme.DrawTracked(g, state, CardState, open ? AppTheme.Online : Color.FromArgb(92, 99, 112), new Rectangle(stateRight - stateSize.Width, r.Y, stateSize.Width + 2, r.Height), .8f);
+        int textWidth = stateRight - stateSize.Width - 12 - (r.X + 72);
+        TextRenderer.DrawText(g, slot.Name, CardName, new Rectangle(r.X + 72, r.Y + 11, textWidth, 22), skipped ? Muted : Ink, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
         string subtitle = slot.LaunchMethod == ClientLaunchMethod.BattleNet ? slot.BattleNet?.AccountLabel ?? "Battle.net" : "Direct / private server";
         TextRenderer.DrawText(g, subtitle, CardDetail, new Rectangle(r.X + 72, r.Y + 33, textWidth, 18), Muted, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+    }
+    // The tick box at the right end of a client card: ticked clients are opened by Start clients.
+    private static Rectangle StartBoxBounds(Rectangle card) => new(card.Right - 16 - 18, card.Y + (card.Height - 18) / 2, 18, 18);
+    private static void DrawStartBox(Graphics g, Rectangle box, bool on)
+    {
+        var smoothing = g.SmoothingMode; g.SmoothingMode = SmoothingMode.AntiAlias;
+        using (var shape = AppTheme.Round(new RectangleF(box.X + .5f, box.Y + .5f, box.Width - 1, box.Height - 1), 4))
+        {
+            using var fill = new SolidBrush(on ? AppTheme.Blue : AppTheme.Field); g.FillPath(fill, shape);
+            using var edge = new Pen(on ? AppTheme.Blue : Color.FromArgb(78, 85, 100)); g.DrawPath(edge, shape);
+        }
+        if (on)
+        {
+            using var tick = new Pen(Color.White, 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+            g.DrawLines(tick, new PointF[] { new(box.X + 4.5f, box.Y + 9.5f), new(box.X + 7.5f, box.Y + 12.5f), new(box.X + 13.5f, box.Y + 5.5f) });
+        }
+        g.SmoothingMode = smoothing;
+    }
+    private bool OverStartBox(Point p, out int index)
+    {
+        index = slots.IndexFromPoint(p);
+        return index >= 0 && Rectangle.Inflate(StartBoxBounds(slots.GetItemRectangle(index)), 6, 8).Contains(p);
+    }
+    private void ToggleStart(int index)
+    {
+        if (busy || index < 0 || index >= layout.Slots.Count) return;
+        var slot = layout.Slots[index]; slot.StartWithLayout = !slot.StartWithLayout;
+        slots.Invalidate(slots.GetItemRectangle(index)); canvas.Invalidate(); SaveSoon();
+        Log($"{slot.Name}: {(slot.StartWithLayout ? "opens" : "is left closed")} when you press Start clients.");
     }
     private readonly ContextMenuStrip clientMenu = new() { Name = "ClientActions", Renderer = new WorkspaceMenuRenderer(), ShowImageMargin = false, Font = new("Segoe UI", 10f) };
     private readonly ToolStripMenuItem closeClients = new("Close clients") { Name = "CloseClients", Padding = new(8, 6, 8, 6), ToolTipText = "Close the open clients of this layout, like clicking each window's X." },
