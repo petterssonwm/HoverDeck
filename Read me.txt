@@ -1,4 +1,4 @@
-HOVERDECK 1.8.2 — WoW workspace
+HOVERDECK 1.8.3 — WoW workspace
 
 Open HoverDeck.exe. Requires Windows x64, .NET 8 Windows Desktop Runtime and Microsoft Edge WebView2 Runtime.
 Downloads: https://dotnet.microsoft.com/download/dotnet/8.0 and https://developer.microsoft.com/microsoft-edge/webview2/ (Evergreen Runtime).
@@ -116,6 +116,8 @@ HOVER FOCUS
 Use the Hover focus switch above Start clients or the saved global hotkey. Settings > Hover focus adjusts the delay from 0 to 5000 milliseconds and changes the shortcut; The switch delay is how long the mouse rests on a client before it gets the keyboard; Ctrl+Alt+H and 10 ms are the defaults for new installs. Actual timing follows native Windows activation.
 
 Only game executable paths configured in saved layouts are eligible. Hover focus gives keyboard focus without clicking or typing and uses Windows' no-raise tracking mode. Fullscreen-windowed taskbar coverage separately adjusts the relevant game windows' stacking while WoW is active. Hover focus pauses while mouse buttons are held and while launch/login setup is active.
+
+Held Ctrl, Shift and Alt follow you: a client that gets focus while you hold a modifier would otherwise treat it as released, so a Ctrl+key bind fails until you press Ctrl again. HoverDeck therefore presses each held Ctrl/Shift/Alt again in the client that just got focus, about 80 ms after it gets focus (a quick release-and-press, so the game sees a fresh press; the key ends up held, as it really is). Letting go of the real key releases it there. If Windows blocks it, the reason appears in Settings > Activity log. It only applies to configured clients while hover focus is on.
 
 While HoverDeck is open it manages system-wide active-window tracking. OFF pauses it. Minimize goes to the taskbar, or to the notification area if Settings > Minimize to notification area is on; the shortcut keeps working either way. Exit restores the original hover tracking, delay and raise settings. A separate watchdog also restores them after a crash. Changes are for the current Windows session, not permanent profile changes.
 

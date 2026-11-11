@@ -34,7 +34,8 @@ public sealed class HoverSnapshot
 
 // Windows implements focus without raising via active-window tracking. A dedicated
 // low-level mouse hook gates that feature BEFORE each pointer event is queued.
-// Only configured client HWNDs are eligible. No injected keys, clicks or game hooks.
+// Only configured client HWNDs are eligible. No clicks or game hooks, and no keys except the
+// modifier carry-over (HeldModifiers): a release-and-press of a Ctrl/Shift/Alt you are already holding.
 public sealed class HoverService : IDisposable
 {
     internal static readonly string RecoveryPath = Path.Combine(Storage.DirectoryPath, "hover-recovery.json");
@@ -45,6 +46,13 @@ public sealed class HoverService : IDisposable
     private HoverSnapshot? snapshot;
     private volatile HashSet<nint> eligible = new();
     private bool enabled, nativeEnabled, suspended;
+    private System.Windows.Forms.Timer? carryTimer;
+    private nint carryWindow;
+    private int carryCount;
+    private volatile string carryNote = "";
+    // Changes each time a carry-over fails, so the activity log can show why.
+    public int CarryCount => Volatile.Read(ref carryCount);
+    public string CarryNote => carryNote;
     private readonly int delay;
     private nint hook;
     private Native.HookProc? callback;
@@ -136,7 +144,7 @@ public sealed class HoverService : IDisposable
             coverageTimer = new() { Interval = 150 };
             coverageTimer.Tick += (_, _) => CheckCoverage(); coverageTimer.Start();
             // Re-check layers the moment another window takes focus, not only on the next tick.
-            foregroundCallback = (_, _, _, _, _, _, _) => CheckCoverage();
+            foregroundCallback = (_, _, window, _, _, _, _) => { CarryModifiers(window); CheckCoverage(); };
             foregroundHook = Native.SetWinEventHook(0x0003, 0x0003, 0, foregroundCallback, 0, 0, 0); // EVENT_SYSTEM_FOREGROUND, out of context
             ready.Set(); Application.Run();
         }
@@ -145,6 +153,7 @@ public sealed class HoverService : IDisposable
         {
             timer?.Dispose();
             coverageTimer?.Dispose();
+            carryTimer?.Dispose();
             if (foregroundHook != 0) Native.UnhookWinEvent(foregroundHook);
             if (hook != 0) Native.UnhookWindowsHookEx(hook);
             if (snapshot is not null)
@@ -178,6 +187,32 @@ public sealed class HoverService : IDisposable
         Native.Setting(0x1001, desired ? 1 : 0);
         nativeEnabled = desired;
     }
+    // A client that gains focus never saw the key-down of a modifier that was already held, so WoW treats
+    // it as released. A plain extra key-down would reach it marked as a key repeat (Windows already counts
+    // the key as down), so each held modifier gets a quick release-and-press instead. It waits a moment so
+    // the client has finished its own focus handling (which clears its keys) first. The final state is the
+    // real one: still held, and released by the real key. Only for configured clients while hover focus is on.
+    private void CarryModifiers(nint window)
+    {
+        if (!enabled || suspended || window == 0) return;
+        if (!eligible.Contains(Native.GetAncestor(window, 2))) return;
+        carryWindow = window;
+        if (carryTimer is null) { carryTimer = new() { Interval = CarryDelayMs }; carryTimer.Tick += (_, _) => { carryTimer.Stop(); FinishCarry(); }; }
+        carryTimer.Stop(); carryTimer.Start();
+    }
+    internal const int CarryDelayMs = 80;
+    private void FinishCarry()
+    {
+        var window = carryWindow; carryWindow = 0;
+        if (!enabled || suspended || window == 0) return;
+        var held = HeldModifiers.Held(key => (Native.GetAsyncKeyState(key) & 0x8000) != 0);
+        if (held.Length == 0) return;
+        string names = HeldModifiers.Names(held);
+        if (Native.GetForegroundWindow() != window) { Note($"Held {names} not carried: focus moved on before it could be pressed again."); return; }
+        try { HeldModifiers.Send(HeldModifiers.Events(held)); }
+        catch (Exception ex) { Note($"Held {names} not carried: {ex.Message}"); }
+    }
+    private void Note(string text) { carryNote = text; Interlocked.Increment(ref carryCount); }
     public void UpdateWindows(IEnumerable<GameWindow> windows) => eligible = windows.Select(w => w.Handle).ToHashSet();
     public void UpdateCoverage(IEnumerable<GameWindow> tracked, IEnumerable<GameWindow> fullscreen, IReadOnlyDictionary<nint, int>? layers = null, IReadOnlySet<nint>? fullMonitor = null) => coverageTargets = new(tracked.ToArray(), fullscreen.ToArray(), layers, fullMonitor);
     private void CheckCoverage()
@@ -200,5 +235,32 @@ public sealed class HoverService : IDisposable
         if (dispatcher is { IsDisposed: false }) dispatcher.BeginInvoke((Action)(() => Application.ExitThread()));
         thread.Join(TimeSpan.FromSeconds(3));
         ready.Dispose();
+    }
+}
+
+internal static class HeldModifiers
+{
+    // Left/right Ctrl, Shift and Alt: the side-specific key to test, the generic key WoW receives,
+    // and the keyboard scan code (with the extended flag that marks the right-hand Ctrl and Alt).
+    internal static readonly (int Test, ushort Key, ushort Scan, bool Extended, string Name)[] Modifiers =
+    {
+        (0xA2, 0x11, 0x1D, false, "left Ctrl"), (0xA3, 0x11, 0x1D, true, "right Ctrl"),
+        (0xA0, 0x10, 0x2A, false, "left Shift"), (0xA1, 0x10, 0x36, false, "right Shift"),
+        (0xA4, 0x12, 0x38, false, "left Alt"), (0xA5, 0x12, 0x38, true, "right Alt"),
+    };
+    internal static (int Test, ushort Key, ushort Scan, bool Extended, string Name)[] Held(Func<int, bool> isDown) => Modifiers.Where(k => isDown(k.Test)).ToArray();
+    internal static string Names(IEnumerable<(int Test, ushort Key, ushort Scan, bool Extended, string Name)> keys) => string.Join(" + ", keys.Select(k => k.Name));
+    // Each held key is released and pressed again, so the client sees a fresh press rather than a repeat.
+    // The key ends up down, exactly like the real key, and its real release still arrives later.
+    internal static LoginInput.Input[] Events(IEnumerable<(int Test, ushort Key, ushort Scan, bool Extended, string Name)> held) => held
+        .SelectMany(k => new[] { Event(k.Key, k.Scan, k.Extended, true), Event(k.Key, k.Scan, k.Extended, false) }).ToArray();
+    private static LoginInput.Input Event(ushort key, ushort scan, bool extended, bool up) =>
+        new() { Type = 1, Data = new() { Keyboard = new() { Key = key, Scan = scan, Flags = (extended ? 1u : 0) | (up ? 2u : 0) } } };
+    [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, LoginInput.Input[] input, int size);
+    internal static void Send(LoginInput.Input[] events)
+    {
+        if (events.Length == 0) return;
+        if (SendInput((uint)events.Length, events, Marshal.SizeOf<LoginInput.Input>()) != events.Length)
+            throw new InvalidOperationException("Windows blocked the key. Run HoverDeck and the client at the same permission level.");
     }
 }

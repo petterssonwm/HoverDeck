@@ -36,6 +36,14 @@ internal static class SelfTests
             var config = new Settings { DelayMs = 0, Layouts = new() { l } };
             var roundtrip = JsonSerializer.Deserialize<Settings>(JsonSerializer.Serialize(config, Storage.Json), Storage.Json)!;
             Check("Profiles round-trip paths, negative coordinates and zero delay", roundtrip.DelayMs == 0 && roundtrip.Layouts[0].Slots[0].X == -1920 && roundtrip.Layouts[0].Slots[2].Executable == b);
+            Check("Settings saved by the test build with the old carry-over switch still load", JsonSerializer.Deserialize<Settings>("{\"DelayMs\":10,\"CarryModifiers\":false}", Storage.Json)!.DelayMs == 10);
+            Check("Nothing held sends no keys", HeldModifiers.Events(HeldModifiers.Held(_ => false)).Length == 0);
+            var carried = HeldModifiers.Events(HeldModifiers.Held(k => k is 0xA3 or 0xA0));
+            Check("Held right Ctrl and left Shift are released and pressed again, ending pressed, right Ctrl marked extended", carried.Length == 4
+                && carried.All(e => e.Type == 1)
+                && carried[0].Data.Keyboard is { Key: 0x11, Scan: 0x1D, Flags: 3 } && carried[1].Data.Keyboard is { Key: 0x11, Scan: 0x1D, Flags: 1 }
+                && carried[2].Data.Keyboard is { Key: 0x10, Scan: 0x2A, Flags: 2 } && carried[3].Data.Keyboard is { Key: 0x10, Scan: 0x2A, Flags: 0 });
+            Check("Each side of Ctrl, Shift and Alt is carried", HeldModifiers.Held(_ => true).Length == 6 && HeldModifiers.Names(HeldModifiers.Held(k => k is 0xA2 or 0xA4)) == "left Ctrl + left Alt");
             Check("Older profiles default to direct launch", JsonSerializer.Deserialize<Slot>("{\"Name\":\"old\"}")!.LaunchMethod == ClientLaunchMethod.Direct);
             var licenses = new[] { "WoW1 (US)", "WoW1 (EU)", "WoW3 (EU)", "WoW4 (EU) - Starter Edition", "WoW9 (KR)", "WoW10 (EU)" };
             var bn = new BattleNetLaunch { AccountNumber = 3, Region = "Auto", GameTabId = "game-nav-btn-WoWC", GameVersion = "World of Warcraft Classic", Executable = a };

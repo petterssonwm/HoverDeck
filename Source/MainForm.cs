@@ -36,6 +36,7 @@ public sealed partial class MainForm : Form
     private bool syncing, busy, hotkeyRegistered, closing;
     private FormWindowState restoreState = FormWindowState.Normal;
     private string? lastHoverError;
+    private int lastCarryCount;
     private string? lastCoverageError;
     private bool displaysReady, displayRefreshQueued;
 
@@ -209,6 +210,7 @@ public sealed partial class MainForm : Form
             foreach (var s in layout.Slots) if (canvas.Assigned.TryGetValue(s.Id, out var w)) { signature.Add(s.Id); signature.Add(w.Handle); signature.Add(w.Bounds); signature.Add(w.Minimized); }
             if (signature.ToHashCode() is var current && current != openSignature) { openSignature = current; slots.Invalidate(); canvas.Invalidate(); }
             UpdateApplyButton(); UpdateConnectBar(windows);
+            if (hover is { CarryCount: var carries } && carries != lastCarryCount) { lastCarryCount = carries; Log(hover.CarryNote); }
             if (hover?.Error is { } err && lastHoverError != err) { lastHoverError = err; Log("Hover focus error: " + err); toggle.Checked = false; }
             string coverageStatus = "";
             if (hover?.CoverageError is { } coverageError)
