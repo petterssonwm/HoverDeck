@@ -9,7 +9,8 @@ internal static class TaskbarCoverageTests
     {
         var first = new GameWindow(501, 51, 1001, @"C:\Fixture\Wow.exe", "Fixture", new(0, 0, 800, 900), false);
         var second = first with { Handle = 502, ProcessId = 52, Started = 1002 };
-        var backend = new FakeLayers(first, second);
+        var own = first with { Handle = 503, ProcessId = 53, Started = 1003 }; // made topmost by the game itself
+        var backend = new FakeLayers(first, second, own);
         var saved = new List<WindowLayerSnapshot>(); bool journalFirst = true;
         var coverage = new TaskbarCoverage(backend, values => saved = values);
         backend.Changing = (handle, value) => { if (value && !backend.Topmost.Contains(handle) && !saved.Any(w => w.Handle == handle.ToInt64())) journalFirst = false; };
@@ -25,10 +26,10 @@ internal static class TaskbarCoverageTests
         check("A taskbar raised over a managed client triggers only the needed correction", backend.Calls.Count == calls + 1 && backend.Calls.Last() == (second.Handle, true));
         backend.Foreground = 999; coverage.Update(targets);
         check("Switching to another app restores stacking and clears recovery entries", backend.Topmost.Count == 0 && saved.Count == 0);
-        backend.Topmost.Add(second.Handle); backend.BarAbove.Add(second.Handle); backend.Foreground = first.Handle; coverage.Update(targets);
-        check("A game already marked topmost can also move above a raised taskbar", !backend.BarAbove.Contains(second.Handle) && !saved.Any(w => w.Handle == second.Handle.ToInt64()));
+        backend.Topmost.Add(own.Handle); backend.BarAbove.Add(own.Handle); backend.Foreground = first.Handle; coverage.Update(new(new[] { first, second, own }, new[] { first, second, own }));
+        check("A game already marked topmost can also move above a raised taskbar", !backend.BarAbove.Contains(own.Handle) && !saved.Any(w => w.Handle == own.Handle.ToInt64()));
         coverage.Update(CoverageTargets.Empty);
-        check("A window already made topmost by the game is preserved", backend.Topmost.SetEquals(new[] { second.Handle }) && saved.Count == 0);
+        check("A window already made topmost by the game is preserved", backend.Topmost.SetEquals(new[] { own.Handle }) && saved.Count == 0);
         backend.Topmost.Clear(); coverage.Update(targets);
         coverage.Update(new(new[] { first, second }, new[] { first }));
         check("Switching a client to Windowed restores only that client's stacking", backend.Topmost.SetEquals(new[] { first.Handle }) && saved.Count == 1);
@@ -47,6 +48,23 @@ internal static class TaskbarCoverageTests
         queued.Update(new(new[] { first }, new[] { first }));
         backend.Foreground = 999; queued.Update(CoverageTargets.Empty); backend.Flush();
         check("Leaving before an asynchronous promotion finishes still restores normal stacking", backend.Topmost.Count == 0);
+        // Returning to a busy client before its release lands: its topmost flag is still HoverDeck's own.
+        var only = new CoverageTargets(new[] { first }, new[] { first });
+        long now = 0; var recorded = new List<WindowLayerSnapshot>();
+        var busy = new TaskbarCoverage(backend, values => recorded = values, () => now);
+        backend.Foreground = first.Handle; busy.Update(only); backend.Flush();
+        backend.Foreground = 999; busy.Update(only);
+        backend.BarAbove.Add(first.Handle); backend.Foreground = first.Handle; busy.Update(only); // the taskbar rose meanwhile: lifted again
+        check("Returning before a release lands keeps the client recorded", recorded.Any(w => w.Handle == first.Handle.ToInt64() && !w.WasTopmost));
+        backend.Flush(); backend.Foreground = 999; busy.Update(only); backend.Flush();
+        check("Leaving again after such a return restores normal stacking, so HoverDeck can come to the front", backend.Topmost.Count == 0 && recorded.Count == 0);
+        // A lift that lands after its release is put back, without flooding a busy game.
+        backend.Topmost.Add(first.Handle); int before = backend.Calls.Count; now += 200; busy.Update(only); backend.Flush();
+        check("A late lift is not undone again within a second of the release", backend.Topmost.Contains(first.Handle) && backend.Calls.Count == before);
+        now += 1000; busy.Update(only); backend.Flush();
+        check("A released client still topmost after a second is put back to normal stacking", backend.Topmost.Count == 0);
+        now += 5000; before = backend.Calls.Count; busy.Update(only);
+        check("A released client in normal stacking is left alone", backend.Calls.Count == before);
     }
 
     private sealed class FakeLayers(params GameWindow[] windows) : IWindowLayerBackend

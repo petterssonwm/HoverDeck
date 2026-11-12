@@ -43,9 +43,17 @@ internal sealed class WindowsWindowLayerBackend : IWindowLayerBackend
     public void SetTopmost(nint handle, bool value) => Native.SetTopmost(handle, value);
 }
 
-internal sealed class TaskbarCoverage(IWindowLayerBackend backend, Action<List<WindowLayerSnapshot>> persist)
+internal sealed class TaskbarCoverage(IWindowLayerBackend backend, Action<List<WindowLayerSnapshot>> persist, Func<long>? clock = null)
 {
     private readonly Dictionary<long, WindowLayerSnapshot> changed = new();
+    // Every client HoverDeck has lifted. Lifting and releasing are queued to the game, so a busy game can still
+    // show HoverDeck's own topmost flag after its release. Such a flag is never mistaken for the game's own:
+    // the client is recorded again when it is lifted again, and a released client found still topmost is put back.
+    private readonly Dictionary<long, WindowLayerSnapshot> lifted = new();
+    private readonly Dictionary<long, long> releasedAt = new();
+    private const long ReleaseRetryMs = 1000;
+    private long Now => clock?.Invoke() ?? Environment.TickCount64;
+    private bool Lifted(WindowLayerSnapshot window) => lifted.TryGetValue(window.Handle, out var known) && known.ProcessId == window.ProcessId && known.Started == window.Started;
     // A client covering its whole display does not need lifting: Windows keeps the taskbar out of the
     // way of an active full-display window by itself. If clients on higher layers sit on top of it,
     // lifting it would put it in the same band as them, and every click on it would briefly cover them.
@@ -81,27 +89,42 @@ internal sealed class TaskbarCoverage(IWindowLayerBackend backend, Action<List<W
             if (desired.TryGetValue(old.Handle, out var wanted) && wanted.ProcessId == old.ProcessId && wanted.Started == old.Started) continue;
             try
             {
-                if (backend.Exists(old)) backend.SetTopmost((nint)old.Handle, old.WasTopmost);
+                if (backend.Exists(old)) { backend.SetTopmost((nint)old.Handle, old.WasTopmost); releasedAt[old.Handle] = Now; }
                 changed.Remove(old.Handle); removed = true;
             }
             catch (Exception ex) { errors.Add(ex); }
         }
         // A stale recovery entry is harmless; never forget a changed window before restoring it.
         if (removed) persist(changed.Values.ToList());
+        // A lift that landed after its release left the client in front of everything, HoverDeck included.
+        foreach (var window in lifted.Values.ToArray())
+        {
+            if (desired.ContainsKey(window.Handle) || changed.ContainsKey(window.Handle)) continue;
+            if (!backend.Exists(window)) { lifted.Remove(window.Handle); releasedAt.Remove(window.Handle); continue; }
+            nint handle = (nint)window.Handle;
+            try
+            {
+                if (!backend.IsTopmost(handle) || Now - releasedAt.GetValueOrDefault(window.Handle) < ReleaseRetryMs) continue;
+                backend.SetTopmost(handle, false); releasedAt[window.Handle] = Now;
+            }
+            catch (Exception ex) { errors.Add(ex); }
+        }
         foreach (var window in desired.Values.OrderBy(w => w.Handle == foreground.ToInt64()))
         {
             nint handle = (nint)window.Handle;
             try
             {
                 // A game's own topmost flag is kept (and not recorded), but it may still need lifting above a raised taskbar.
-                // A window is recorded before it is changed; one Windows refuses stays recorded, which is harmless to restore.
+                // A flag left by HoverDeck's own earlier lift is not the game's. A window is recorded before it is
+                // changed; one Windows refuses stays recorded, which is harmless to restore.
                 bool topmost = backend.IsTopmost(handle);
-                if (!topmost && !changed.ContainsKey(window.Handle))
+                if ((!topmost || Lifted(window)) && !changed.ContainsKey(window.Handle))
                 {
                     changed.Add(window.Handle, window);
                     try { persist(changed.Values.ToList()); }
                     catch { changed.Remove(window.Handle); throw; }
                 }
+                if (changed.ContainsKey(window.Handle)) lifted[window.Handle] = window;
                 if (!topmost || backend.TaskbarAbove(handle)) backend.SetTopmost(handle, true);
             }
             catch (Exception ex) { errors.Add(ex); }
